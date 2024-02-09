@@ -1,0 +1,60 @@
+from enum import Enum
+from typing import List
+
+from lxml import etree
+
+from modules.constants import NAMESPACES
+
+
+class ContentEntryType(Enum):
+    COLLECTION = "collection"
+    RESOURCE = "resource"
+
+
+class ContentEntry:
+    name: str
+    file: str
+    type: ContentEntryType
+
+    def __init__(self, element: etree._Element, collection: bool = False):
+        name = element.get("name")
+        assert name is not None
+        self.name = name
+        file = element.get("filename")
+        assert file is not None
+        self.file = file
+        self.type = (
+            ContentEntryType.COLLECTION if collection else ContentEntryType.RESOURCE
+        )
+
+    def __str__(self):
+        return f"{self.type.value}: name={self.name}; filename={self.file}"
+
+
+class ContentEntryCollection(ContentEntry):
+    def __init__(self, element: etree._Element):
+        super().__init__(element, True)
+
+
+class ContentEntryResource(ContentEntry):
+    def __init__(self, element: etree._Element):
+        super().__init__(element, False)
+
+
+class ContentsXml:
+    xml: etree._ElementTree
+    collections: List[ContentEntryCollection] = []
+    resources: List[ContentEntryResource] = []
+
+    def __init__(self, xml: etree._ElementTree):
+        self.xml = xml
+        self.collections = [
+            ContentEntryCollection(collection)
+            for collection in xml.findall("/exist:subcollection", NAMESPACES)
+        ]
+        self.resources = [
+            ContentEntryResource(resource)
+            for resource in xml.findall(
+                "/exist:resource[@type='XMLResource']", NAMESPACES
+            )
+        ]
