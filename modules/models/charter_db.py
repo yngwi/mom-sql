@@ -86,8 +86,8 @@ class CharterDb:
                 atom_id TEXT NOT NULL,
                 country_code CHAR(2) NOT NULL,
                 name TEXT NOT NULL,
-                repository_id TEXT NOT NULL,
-                has_oai BOOLEAN DEFAULT FALSE
+                oai_shared BOOLEAN DEFAULT FALSE,
+                repository_id TEXT NOT NULL
             )"""
         )
         self._cur.execute(
@@ -98,6 +98,7 @@ class CharterDb:
                 free_image_access BOOLEAN NOT NULL DEFAULT FALSE,
                 identifier TEXT NOT NULL,
                 image_base TEXT,
+                oai_shared BOOLEAN DEFAULT FALSE,
                 title TEXT NOT NULL,
                 FOREIGN KEY (archive_id) REFERENCES archives(id)
             )"""
@@ -156,13 +157,13 @@ class CharterDb:
                 archive.atom_id,
                 archive.countrycode,
                 archive.name,
-                archive.repository_id,
                 archive.oai is not None,
+                archive.repository_id,
             ]
             for archive in archives
         ]
         self._cur.executemany(
-            "INSERT INTO archives (id, atom_id, country_code, name, repository_id, has_oai) VALUES (%s, %s, %s, %s, %s, %s)",
+            "INSERT INTO archives (id, atom_id, country_code, name, oai_shared, repository_id) VALUES (%s, %s, %s, %s, %s, %s)",
             records,
         )
         self._con.commit()
@@ -178,12 +179,13 @@ class CharterDb:
                 fond.free_image_access,
                 fond.identifier,
                 fond.image_base,
+                fond.oai_shared,
                 fond.title,
             ]
             for fond in fonds
         ]
         self._cur.executemany(
-            "INSERT INTO fonds (id, archive_id, atom_id, free_image_access, identifier, image_base, title) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO fonds (id, archive_id, atom_id, free_image_access, identifier, image_base, oai_shared, title) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             records,
         )
         self._con.commit()

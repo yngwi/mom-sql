@@ -16,6 +16,7 @@ class XmlFond:
     id: int
     identifier: str
     image_base: None | str = None
+    oai_shared: bool = False
     title: str
 
     def __init__(
@@ -61,6 +62,11 @@ class XmlFond:
         else:
             self.title = unititle.text
         self.title = normalize_string(self.title)
+
+        if archive.oai is not None:
+            for fond in archive.oai.fonds:
+                if fond == self.identifier:
+                    self.oai_shared = True
 
         if prefs is not None:
             # free_image_access
