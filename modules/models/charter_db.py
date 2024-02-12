@@ -8,8 +8,18 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_user import XmlUser
 
 SETUP_QUERIES = """
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        first_name TEXT,
+        moderator_id INTEGER,
+        name TEXT,
+        FOREIGN KEY (moderator_id) REFERENCES users(id)
+    );
+
     CREATE TABLE IF NOT EXISTS collections (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL,
@@ -46,7 +56,9 @@ SETUP_QUERIES = """
         atom_id TEXT NOT NULL,
         idno_norm TEXT NOT NULL,
         idno_text TEXT NOT NULL,
-        url TEXT NOT NULL
+        url TEXT NOT NULL,
+        last_editor_id INTEGER,
+        FOREIGN KEY (last_editor_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS collections_charters (
@@ -80,12 +92,14 @@ SETUP_QUERIES = """
     );
 
     CREATE INDEX ON fonds (archive_id);
+    CREATE INDEX ON charters (last_editor_id);
     CREATE INDEX ON collections_charters (collection_id);
     CREATE INDEX ON collections_charters (charter_id);
     CREATE INDEX ON fonds_charters (fond_id);
     CREATE INDEX ON fonds_charters (charter_id);
     CREATE INDEX ON charters_images (charter_id);
     CREATE INDEX ON charters_images (image_id);
+    CREATE INDEX ON users (moderator_id);
 """
 
 
@@ -138,29 +152,31 @@ class CharterDb:
                         sql.SQL("CREATE DATABASE {};").format(sql.Identifier(self._db))
                     )
 
-    def _reset_db(self, including_images=False):
+    def _list_tables(self) -> List[str]:
         if not self._con or not self._cur:
-            return
+            return []
         self._cur.execute(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
         )
-        tables = self._cur.fetchall()
-        for table in tables:
-            if table[0] == "images" and not including_images:
-                print("Skipping images table.")
-                continue
-            self._cur.execute(
-                sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
-                    sql.Identifier(table[0])
-                )
-            )
-            print(f"Table {table[0]} dropped successfully.")
-        self._con.commit()
+        return [table[0] for table in self._cur.fetchall()]
 
-    def setup_db(self):
+    def _reset_db(self, reset_tables: List[str]):
         if not self._con or not self._cur:
             return
-        self._reset_db()
+        tables: List[str] = (
+            reset_tables if len(reset_tables) > 0 else self._list_tables()
+        )
+        for table in tables:
+            self._cur.execute(
+                sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
+            )
+            print(f"Table {table} dropped")
+        self._con.commit()
+
+    def setup_db(self, reset_tables: List[str] = []):
+        if not self._con or not self._cur:
+            return
+        self._reset_db(reset_tables)
         self._cur.execute(SETUP_QUERIES)
         self._con.commit()
 
@@ -236,11 +252,12 @@ class CharterDb:
                 charter.idno_norm,
                 charter.idno_text,
                 charter.url,
+                charter.last_editor_id,
             ]
             for charter in charters
         ]
         self._cur.executemany(
-            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url) VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url, last_editor_id) VALUES (%s, %s, %s, %s, %s, %s)",
             charter_records,
         )
         collections_charters_records = [
@@ -288,11 +305,12 @@ class CharterDb:
                 charter.idno_norm,
                 charter.idno_text,
                 charter.url,
+                charter.last_editor_id,
             ]
             for charter in charters
         ]
         self._cur.executemany(
-            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url) VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url, last_editor_id) VALUES (%s, %s, %s, %s, %s, %s)",
             charter_records,
         )
         fonds_charters_records = [[charter.fond_id, charter.id] for charter in charters]
@@ -335,5 +353,35 @@ class CharterDb:
         self._cur.executemany(
             "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
             records,
+        )
+        self._con.commit()
+
+    def insert_users(self, users: List[XmlUser]):
+        if not self._con or not self._cur:
+            return
+        for user in users:
+            if user.moderater_email == "g.vogeler@lrz.uni-muenchen.at":
+                print(user.email, user.moderater_email)
+        email_id_map = {user.email.lower(): user.id for user in users}
+        records = [
+            [
+                user.id,
+                user.email,
+                user.first_name,
+                user.name,
+            ]
+            for user in users
+        ]
+        self._cur.executemany(
+            "INSERT INTO users (id, email, first_name, name) VALUES (%s, %s, %s, %s)",
+            records,
+        )
+        moderated_records = [
+            [email_id_map[user.moderater_email.lower()], user.id]
+            for user in users
+            if user.moderater_email is not None
+        ]
+        self._cur.executemany(
+            "UPDATE users SET moderator_id = %s WHERE id = %s", moderated_records
         )
         self._con.commit()

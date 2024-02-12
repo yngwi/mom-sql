@@ -1,9 +1,12 @@
+from typing import List
+
 import validators
 from lxml import etree
 
 from modules.constants import NAMESPACES
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_fond import XmlFond
+from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts
 
 
@@ -18,6 +21,7 @@ class XmlFondCharter(XmlCharter):
         file: str,
         fond: XmlFond,
         cei: etree._ElementTree,
+        users: List[XmlUser],
     ):
         # images
         images = []
@@ -44,7 +48,7 @@ class XmlFondCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(file, cei, images, url)
+        super().__init__(file, cei, images, url, users)
 
         # archive_id
         self.archive_id = fond.archive_id
