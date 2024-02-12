@@ -26,7 +26,7 @@ class XmlFond:
         prefs: None | etree._ElementTree,
     ):
         # id
-        self.id = SerialIDGenerator().get_serial_id(self.__class__.__name__)
+        self.id = SerialIDGenerator().get_serial_id(self.__class__)
 
         # file
         self.file = file
