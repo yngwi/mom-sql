@@ -47,16 +47,15 @@ class CharterDb:
 
     def _create_db(self):
         dsn = f"dbname='postgres' user='{self._user}' host='{self._host}' password='{self._password}' port='{self._port}'"
-        with psycopg.connect(dsn) as conn:
+        with psycopg.connect(dsn, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", [self._db])
                 db_exists = cur.fetchone()
                 if not db_exists:
                     print(f"Database {self._db} does not exist. Creating...")
                     cur.execute(
-                        sql.SQL("CREATE DATABASE {};").format(sql.Literal(self._db))
+                        sql.SQL("CREATE DATABASE {};").format(sql.Identifier(self._db))
                     )
-                conn.commit()
 
     def _reset_db(self, including_images=False):
         if not self._con or not self._cur:
