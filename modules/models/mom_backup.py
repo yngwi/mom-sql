@@ -41,6 +41,8 @@ class MomBackup:
             entries = ContentsXml(etree.parse(users_contents))
             for user_entry in entries.resources:
                 file = correct_filename(user_entry.file)
+                if file == "admin.xml" or file == "guest.xml":
+                    continue
                 if file.lower() in users:
                     print(
                         f"Different case for {file}. Potential conflict with {users[file.lower()].file}. Skipping."
