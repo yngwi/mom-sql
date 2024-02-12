@@ -359,9 +359,6 @@ class CharterDb:
     def insert_users(self, users: List[XmlUser]):
         if not self._con or not self._cur:
             return
-        for user in users:
-            if user.moderater_email == "g.vogeler@lrz.uni-muenchen.at":
-                print(user.email, user.moderater_email)
         email_id_map = {user.email.lower(): user.id for user in users}
         records = [
             [
@@ -376,11 +373,15 @@ class CharterDb:
             "INSERT INTO users (id, email, first_name, name) VALUES (%s, %s, %s, %s)",
             records,
         )
-        moderated_records = [
-            [email_id_map[user.moderater_email.lower()], user.id]
-            for user in users
-            if user.moderater_email is not None
-        ]
+        moderated_records = []
+        for user in users:
+            moderator_email = user.moderater_email
+            if moderator_email is None:
+                continue
+            moderator_id = email_id_map.get(moderator_email.lower())
+            if moderator_id is None or moderator_id == user.id:
+                continue
+            moderated_records.append((moderator_id, user.id))
         self._cur.executemany(
             "UPDATE users SET moderator_id = %s WHERE id = %s", moderated_records
         )

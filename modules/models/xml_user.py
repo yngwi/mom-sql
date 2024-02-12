@@ -24,31 +24,31 @@ class XmlUser:
         self.file = file
 
         # email
-        email = xrx.find("./xrx:email", NAMESPACES)
-        assert email is not None
-        assert email.text is not None
-        self.email = normalize_string(email.text)
+        email = normalize_string(xrx.findtext("./xrx:email", "", NAMESPACES))
+        assert email != ""
+        self.email = normalize_string(email)
 
         # first_name
-        first_name = xrx.find("./xrx:firstname", NAMESPACES)
-        if first_name is not None and first_name.text is not None:
-            self.first_name = normalize_string(first_name.text)
+        first_name = normalize_string(xrx.findtext("./xrx:firstname", "", NAMESPACES))
+        if first_name != "":
+            self.first_name = first_name
 
         # name
-        name = xrx.find("./xrx:name", NAMESPACES)
-        if name is not None and name.text is not None:
-            self.name = normalize_string(name.text)
+        name = normalize_string(xrx.findtext("./xrx:name", "", NAMESPACES))
+        if name != "":
+            self.name = name
 
         # moderater_email
-        moderater_mom_id = xrx.find("./xrx:moderator", NAMESPACES)
-        if moderater_mom_id is not None and moderater_mom_id.text is not None:
+        moderater_mom_id = normalize_string(
+            xrx.findtext("./xrx:moderator", "", NAMESPACES)
+        )
+        if moderater_mom_id != "":
             self.moderater_email = (
-                normalize_string(moderater_mom_id.text)
+                moderater_mom_id
                 # replace wrong moderator addresses from Georg Vogeler
                 .replace(
                     "g.vogeler@lrz.uni-muenchen.at", "g.vogeler@lrz.uni-muenchen.de"
-                )
-                .replace("g.vogeler@lrz.uni-graz.at", "g.vogeler@lrz.uni-muenchen.de")
+                ).replace("g.vogeler@lrz.uni-graz.at", "g.vogeler@lrz.uni-muenchen.de")
             )
 
         # bookmark_atom_ids
