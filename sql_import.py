@@ -30,17 +30,28 @@ with CharterDb(pg_host, pg_password) as db:
         db.insert_archives(archives)
         print("Listing fonds...")
         fonds = backup.list_fonds(archives)
+        print("Inserting fonds...")
+        db.insert_fonds(fonds)
+        print("Listing fond charters...")
         # TODO: for testing, remove
-        # fonds = [
+        # limited_fonds = [
         #     fond
         #     for fond in fonds
         #     # if fond.archive_file == "HR-HDA" and fond.file == "643"
         #     if fond.archive_file == "DE-StaAWo" and fond.file == "Abt1AI"
         # ]
-        fonds = pick_random_items(fonds, 20)  # TODO: for testing, remove
-        print("Inserting fonds...")
-        db.insert_fonds(fonds)
-        print("Listing fond charters...")
-        fond_charters = backup.list_fond_charters(fonds)
+        limited_fonds = pick_random_items(fonds, 20)  # TODO: for testing, remove
+        fond_charters = backup.list_fond_charters(limited_fonds)
         print("Inserting fond charters...")
         db.insert_fonds_charters(fond_charters)
+        # insert collections
+        print("Listing collections...")
+        collections = backup.list_collections(fonds)
+        # insert collections
+        db.insert_collections(collections)
+        # insert collection charters
+        print("Listing collection charters...")
+        limited_collections = pick_random_items(collections, 20)
+        collection_charters = backup.list_collection_charters(limited_collections)
+        print("Inserting collection charters...")
+        db.insert_collections_charters(collection_charters)

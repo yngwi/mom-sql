@@ -4,8 +4,89 @@ import psycopg
 from psycopg import sql
 
 from modules.models.xml_archive import XmlArchive
+from modules.models.xml_collection import XmlCollection
+from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+
+SETUP_QUERIES = """
+    CREATE TABLE IF NOT EXISTS collections (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL,
+        has_linked_fonds BOOLEAN DEFAULT FALSE,
+        identifier TEXT NOT NULL,
+        image_base TEXT,
+        oai_shared BOOLEAN DEFAULT FALSE,
+        title TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS archives (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL,
+        country_code CHAR(2) NOT NULL,
+        name TEXT NOT NULL,
+        oai_shared BOOLEAN DEFAULT FALSE,
+        repository_id TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fonds (
+        id SERIAL PRIMARY KEY,
+        archive_id INTEGER NOT NULL,
+        atom_id TEXT NOT NULL,
+        free_image_access BOOLEAN NOT NULL DEFAULT FALSE,
+        identifier TEXT NOT NULL,
+        image_base TEXT,
+        oai_shared BOOLEAN DEFAULT FALSE,
+        title TEXT NOT NULL,
+        FOREIGN KEY (archive_id) REFERENCES archives(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS charters (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL,
+        idno_norm TEXT NOT NULL,
+        idno_text TEXT NOT NULL,
+        url TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS collections_charters (
+        collection_id INTEGER NOT NULL,
+        charter_id INTEGER NOT NULL,
+        FOREIGN KEY (collection_id) REFERENCES collections(id),
+        FOREIGN KEY (charter_id) REFERENCES charters(id),
+        PRIMARY KEY (collection_id, charter_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fonds_charters (
+        fond_id INTEGER NOT NULL,
+        charter_id INTEGER NOT NULL,
+        FOREIGN KEY (fond_id) REFERENCES fonds(id),
+        FOREIGN KEY (charter_id) REFERENCES charters(id),
+        PRIMARY KEY (fond_id, charter_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS images (
+        id SERIAL PRIMARY KEY,
+        url TEXT UNIQUE NOT NULL,
+        is_external BOOLEAN NOT NULL DEFAULT TRUE
+    );
+
+    CREATE TABLE IF NOT EXISTS charters_images (
+        charter_id INTEGER NOT NULL,
+        image_id INTEGER NOT NULL,
+        FOREIGN KEY (charter_id) REFERENCES charters(id),
+        FOREIGN KEY (image_id) REFERENCES images(id),
+        PRIMARY KEY (charter_id, image_id)
+    );
+
+    CREATE INDEX ON fonds (archive_id);
+    CREATE INDEX ON collections_charters (collection_id);
+    CREATE INDEX ON collections_charters (charter_id);
+    CREATE INDEX ON fonds_charters (fond_id);
+    CREATE INDEX ON fonds_charters (charter_id);
+    CREATE INDEX ON charters_images (charter_id);
+    CREATE INDEX ON charters_images (image_id);
+"""
 
 
 class CharterDb:
@@ -80,73 +161,28 @@ class CharterDb:
         if not self._con or not self._cur:
             return
         self._reset_db()
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS archives (
-                id SERIAL PRIMARY KEY,
-                atom_id TEXT NOT NULL,
-                country_code CHAR(2) NOT NULL,
-                name TEXT NOT NULL,
-                oai_shared BOOLEAN DEFAULT FALSE,
-                repository_id TEXT NOT NULL
-            )"""
-        )
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS fonds (
-                id SERIAL PRIMARY KEY,
-                archive_id INTEGER NOT NULL,
-                atom_id TEXT NOT NULL,
-                free_image_access BOOLEAN NOT NULL DEFAULT FALSE,
-                identifier TEXT NOT NULL,
-                image_base TEXT,
-                oai_shared BOOLEAN DEFAULT FALSE,
-                title TEXT NOT NULL,
-                FOREIGN KEY (archive_id) REFERENCES archives(id)
-            )"""
-        )
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS charters (
-                id SERIAL PRIMARY KEY,
-                atom_id TEXT NOT NULL,
-                idno_norm TEXT NOT NULL,
-                idno_text TEXT NOT NULL,
-                url TEXT NOT NULL
-            )
-            """
-        )
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS fonds_charters (
-                fond_id SERIAL NOT NULL,
-                charter_id INTEGER NOT NULL,
-                FOREIGN KEY (fond_id) REFERENCES fonds(id),
-                FOREIGN KEY (charter_id) REFERENCES charters(id),
-                PRIMARY KEY (fond_id, charter_id)
-            )
-            """
-        )
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS images (
-                id SERIAL PRIMARY KEY,
-                url TEXT UNIQUE NOT NULL,
-                is_external BOOLEAN NOT NULL DEFAULT TRUE
-            )
-            """
-        )
-        self._cur.execute(
-            """CREATE TABLE IF NOT EXISTS charters_images (
-                charter_id INTEGER NOT NULL,
-                image_id INTEGER NOT NULL,
-                FOREIGN KEY (charter_id) REFERENCES charters(id),
-                FOREIGN KEY (image_id) REFERENCES images(id),
-                PRIMARY KEY (charter_id, image_id)
-            )
-            """
-        )
-        self._cur.execute("CREATE INDEX ON fonds (archive_id);")
-        self._cur.execute("CREATE INDEX ON fonds_charters (fond_id);")
-        self._cur.execute("CREATE INDEX ON fonds_charters (charter_id);")
-        self._con.execute("CREATE INDEX ON charters_images (charter_id);")
-        self._con.execute("CREATE INDEX ON charters_images (image_id);")
+        self._cur.execute(SETUP_QUERIES)
         self._con.commit()
+
+    def insert_collections(self, collections: List[XmlCollection]):
+        if not self._con or not self._cur:
+            return
+        records = [
+            [
+                collection.id,
+                collection.atom_id,
+                len(collection.linked_fonds) > 0,
+                collection.identifier,
+                collection.image_base,
+                collection.oai_shared,
+                collection.title,
+            ]
+            for collection in collections
+        ]
+        self._cur.executemany(
+            "INSERT INTO collections (id, atom_id, has_linked_fonds, identifier, image_base, oai_shared, title) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            records,
+        )
 
     def insert_archives(self, archives: List[XmlArchive]):
         if not self._con or not self._cur:
@@ -187,6 +223,58 @@ class CharterDb:
         self._cur.executemany(
             "INSERT INTO fonds (id, archive_id, atom_id, free_image_access, identifier, image_base, oai_shared, title) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             records,
+        )
+        self._con.commit()
+
+    def insert_collections_charters(self, charters: List[XmlCollectionCharter]):
+        if not self._con or not self._cur:
+            return
+        charter_records = [
+            [
+                charter.id,
+                charter.atom_id,
+                charter.idno_norm,
+                charter.idno_text,
+                charter.url,
+            ]
+            for charter in charters
+        ]
+        self._cur.executemany(
+            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url) VALUES (%s, %s, %s, %s, %s)",
+            charter_records,
+        )
+        collections_charters_records = [
+            [charter.collection_id, charter.id] for charter in charters
+        ]
+        self._cur.executemany(
+            "INSERT INTO collections_charters (collection_id, charter_id) VALUES (%s, %s)",
+            collections_charters_records,
+        )
+        image_records = [
+            [image, "images.monasterium.net" not in image]
+            for charter in charters
+            for image in charter.images
+        ]
+        self._cur.executemany(
+            "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
+            image_records,
+        )
+        unique_urls = list(
+            set([image for charter in charters for image in charter.images])
+        )
+        self._cur.execute(
+            "SELECT url, id FROM images WHERE url = ANY(%s)", (unique_urls,)
+        )
+        url_to_id_map = {url: id for url, id in self._cur.fetchall()}
+        charters_images_records = [
+            (charter.id, url_to_id_map[image])
+            for charter in charters
+            for image in charter.images
+            if image in url_to_id_map
+        ]
+        self._cur.executemany(
+            "INSERT INTO charters_images (charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            charters_images_records,
         )
         self._con.commit()
 

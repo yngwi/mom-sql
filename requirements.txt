@@ -1,5 +1,5 @@
 lxml
-lxml-stubs
 psycopg
 psycopg-binary
+types-lxml
 validators
