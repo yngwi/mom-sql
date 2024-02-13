@@ -150,7 +150,7 @@ class MomBackup:
     ) -> List[XmlFondCharter]:
         if not self.zip:
             return []
-        charters: List[XmlFondCharter] = []
+        charters: Dict[str, XmlFondCharter] = {}
         for fond in fonds:
             contents_path = f"db/mom-data/metadata.charter.public/{fond.archive_file}/{fond.file}/__contents__.xml"
             try:
@@ -169,23 +169,26 @@ class MomBackup:
                             print(f"Failed to open charter {contents_path}")
                         assert cei is not None
                         try:
-                            charters.append(
-                                XmlFondCharter(charter_file, fond, cei, users)
-                            )
+                            charter = XmlFondCharter(charter_file, fond, cei, users)
+                            if charter.atom_id in charters:
+                                print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                                continue
+                            else:
+                                charters[charter.atom_id] = charter
                         except Exception as e:
                             print(f"Failed to create charter {contents_path}: {e}")
             except KeyError:
                 print(f"No content for fond {fond.archive_file}; {fond.identifier}")
                 pass
 
-        return charters
+        return list(charters.values())
 
     def list_collection_charters(
         self, collections: List[XmlCollection], users: List[XmlUser]
     ) -> List[XmlCollectionCharter]:
         if not self.zip:
             return []
-        charters: List[XmlCollectionCharter] = []
+        charters: Dict[str, XmlCollectionCharter] = {}
         for collection in collections:
             contents_path = f"db/mom-data/metadata.charter.public/{collection.file}/__contents__.xml"
             try:
@@ -204,11 +207,14 @@ class MomBackup:
                             print(f"Failed to open charter {contents_path}")
                         assert cei is not None
                         try:
-                            charters.append(
-                                XmlCollectionCharter(
-                                    charter_file, collection, cei, users
-                                )
+                            charter = XmlCollectionCharter(
+                                charter_file, collection, cei, users
                             )
+                            if charter.atom_id in charters:
+                                print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                                continue
+                            else:
+                                charters[charter.atom_id] = charter
                         except Exception as e:
                             print(f"Failed to create charter {contents_path}: {e}")
             except KeyError:
@@ -217,4 +223,4 @@ class MomBackup:
                 )
                 pass
 
-        return charters
+        return list(charters.values())

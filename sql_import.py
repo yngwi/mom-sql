@@ -4,8 +4,8 @@ from modules.models.charter_db import CharterDb
 from modules.models.images_file import ImagesFile
 from modules.models.mom_backup import MomBackup
 
-# backup_zip = "./data/full20240202-1515.zip"
-backup_zip = "./data/full20210819-0400.zip"
+backup_zip = "./data/full20240202-1515.zip"
+# backup_zip = "./data/full20210819-0400.zip"
 files_path = "./data/filelist_20240209.txt"
 
 # Postgres settings
@@ -15,7 +15,11 @@ pg_host = os.environ.get("PG_HOST")
 
 with CharterDb(pg_host, pg_password) as db:
     with MomBackup(backup_zip) as backup:
-        # db.setup_db(["users"])
+        print(
+            f"Transforming backup {backup_zip} and importing into database {pg_host}..."
+        )
+
+        # db.setup_db(["users", "user_charter_bookmarks"])
         db.setup_db()
 
         # insert users
@@ -54,3 +58,7 @@ with CharterDb(pg_host, pg_password) as db:
         collection_charters = backup.list_collection_charters(collections, users)
         print("Inserting collection charters...")
         db.insert_collections_charters(collection_charters)
+
+        # insert user bookmarks
+        print("Inserting user charter bookmarks...")
+        db.insert_user_charter_bookmarks(users)

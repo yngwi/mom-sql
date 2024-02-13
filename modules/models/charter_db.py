@@ -19,10 +19,11 @@ SETUP_QUERIES = """
         name TEXT,
         FOREIGN KEY (moderator_id) REFERENCES users(id)
     );
+    CREATE INDEX ON users (moderator_id);
 
     CREATE TABLE IF NOT EXISTS collections (
         id SERIAL PRIMARY KEY,
-        atom_id TEXT NOT NULL,
+        atom_id TEXT NOT NULL UNIQUE,
         has_linked_fonds BOOLEAN DEFAULT FALSE,
         identifier TEXT NOT NULL,
         image_base TEXT,
@@ -32,7 +33,7 @@ SETUP_QUERIES = """
 
     CREATE TABLE IF NOT EXISTS archives (
         id SERIAL PRIMARY KEY,
-        atom_id TEXT NOT NULL,
+        atom_id TEXT NOT NULL UNIQUE,
         country_code CHAR(2) NOT NULL,
         name TEXT NOT NULL,
         oai_shared BOOLEAN DEFAULT FALSE,
@@ -42,7 +43,7 @@ SETUP_QUERIES = """
     CREATE TABLE IF NOT EXISTS fonds (
         id SERIAL PRIMARY KEY,
         archive_id INTEGER NOT NULL,
-        atom_id TEXT NOT NULL,
+        atom_id TEXT NOT NULL UNIQUE,
         free_image_access BOOLEAN NOT NULL DEFAULT FALSE,
         identifier TEXT NOT NULL,
         image_base TEXT,
@@ -50,16 +51,19 @@ SETUP_QUERIES = """
         title TEXT NOT NULL,
         FOREIGN KEY (archive_id) REFERENCES archives(id)
     );
+    CREATE INDEX ON fonds (archive_id);
+    CREATE INDEX ON fonds (image_base);
 
     CREATE TABLE IF NOT EXISTS charters (
         id SERIAL PRIMARY KEY,
-        atom_id TEXT NOT NULL,
+        atom_id TEXT NOT NULL UNIQUE,
         idno_norm TEXT NOT NULL,
         idno_text TEXT NOT NULL,
         url TEXT NOT NULL,
         last_editor_id INTEGER,
         FOREIGN KEY (last_editor_id) REFERENCES users(id)
     );
+    CREATE INDEX ON charters (last_editor_id);
 
     CREATE TABLE IF NOT EXISTS collections_charters (
         collection_id INTEGER NOT NULL,
@@ -68,6 +72,8 @@ SETUP_QUERIES = """
         FOREIGN KEY (charter_id) REFERENCES charters(id),
         PRIMARY KEY (collection_id, charter_id)
     );
+    CREATE INDEX ON collections_charters (collection_id);
+    CREATE INDEX ON collections_charters (charter_id);
 
     CREATE TABLE IF NOT EXISTS fonds_charters (
         fond_id INTEGER NOT NULL,
@@ -76,6 +82,8 @@ SETUP_QUERIES = """
         FOREIGN KEY (charter_id) REFERENCES charters(id),
         PRIMARY KEY (fond_id, charter_id)
     );
+    CREATE INDEX ON fonds_charters (fond_id);
+    CREATE INDEX ON fonds_charters (charter_id);
 
     CREATE TABLE IF NOT EXISTS images (
         id SERIAL PRIMARY KEY,
@@ -90,16 +98,18 @@ SETUP_QUERIES = """
         FOREIGN KEY (image_id) REFERENCES images(id),
         PRIMARY KEY (charter_id, image_id)
     );
-
-    CREATE INDEX ON fonds (archive_id);
-    CREATE INDEX ON charters (last_editor_id);
-    CREATE INDEX ON collections_charters (collection_id);
-    CREATE INDEX ON collections_charters (charter_id);
-    CREATE INDEX ON fonds_charters (fond_id);
-    CREATE INDEX ON fonds_charters (charter_id);
     CREATE INDEX ON charters_images (charter_id);
     CREATE INDEX ON charters_images (image_id);
-    CREATE INDEX ON users (moderator_id);
+
+    CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
+        user_id INTEGER NOT NULL,
+        charter_id INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (charter_id) REFERENCES charters(id),
+        PRIMARY KEY (user_id, charter_id)
+    );
+    CREATE INDEX ON user_charter_bookmarks (user_id);
+    CREATE INDEX ON user_charter_bookmarks (charter_id);
 """
 
 
@@ -384,5 +394,30 @@ class CharterDb:
             moderated_records.append((moderator_id, user.id))
         self._cur.executemany(
             "UPDATE users SET moderator_id = %s WHERE id = %s", moderated_records
+        )
+        self._con.commit()
+
+    def insert_user_charter_bookmarks(self, users: List[XmlUser]):
+        if not self._con or not self._cur:
+            return
+        unique_atom_ids = list(
+            set([bookmark for user in users for bookmark in user.bookmark_atom_ids])
+        )
+        self._cur.execute(
+            "SELECT atom_id, id FROM charters WHERE atom_id = ANY(%s)",
+            (unique_atom_ids,),
+        )
+        atom_id_to_charter_id_map = {
+            atom_id: charter_id for atom_id, charter_id in self._cur.fetchall()
+        }
+        user_bookmarks_records = [
+            (user.id, atom_id_to_charter_id_map[bookmark])
+            for user in users
+            for bookmark in user.bookmark_atom_ids
+            if bookmark in atom_id_to_charter_id_map
+        ]
+        self._cur.executemany(
+            "INSERT INTO user_charter_bookmarks (user_id, charter_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            user_bookmarks_records,
         )
         self._con.commit()

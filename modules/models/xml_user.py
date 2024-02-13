@@ -52,4 +52,8 @@ class XmlUser:
             )
 
         # bookmark_atom_ids
-        self.bookmark_atom_ids = []
+        self.bookmark_atom_ids = [
+            bookmark.text
+            for bookmark in xrx.findall(".//xrx:bookmark", NAMESPACES)
+            if bookmark.text
+        ]
