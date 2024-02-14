@@ -1,11 +1,12 @@
 from typing import List, Type
 
+import validators
 from lxml import etree
 
 from modules.constants import NAMESPACES
 from modules.models.serial_id_generator import SerialIDGenerator, T
 from modules.models.xml_user import XmlUser
-from modules.utils import normalize_string
+from modules.utils import join_url_parts, normalize_string
 
 
 class XmlCharter:
@@ -22,7 +23,7 @@ class XmlCharter:
         self,
         file: str,
         cei: etree._ElementTree,
-        images: List[str],
+        image_base: None | str,
         url: str,
         users: List[XmlUser] = [],
         override_id_gen_name: None | Type[T] = None,
@@ -35,22 +36,35 @@ class XmlCharter:
         # file
         self.file = file
 
-        # images
-        self.images = images
-
         # url
         self.url = url
 
+        # images
+        images = []
+        for graphic in cei.findall(".//cei:graphic", NAMESPACES):
+            url = graphic.attrib.get("url")
+            if url:
+                full_url = (
+                    url
+                    if url.startswith("http")
+                    else join_url_parts(image_base, url)
+                    if image_base is not None
+                    else None
+                )
+                if full_url and validators.url(full_url):
+                    images.append(full_url)
+        self.images = images
+
         # atom_id
-        atom_id = cei.findtext("./atom:id", None, NAMESPACES)
-        if atom_id is None:
-            raise Exception(f"WARNING: No atom_id found for charter {file}")
+        atom_id = cei.findtext("./atom:id", "", NAMESPACES)
+        if atom_id == "":
+            raise Exception(f"No atom_id found for charter {file}")
         self.atom_id = atom_id
 
         # idno
         idno = cei.find(".//cei:idno", NAMESPACES)
         if idno is None:
-            raise Exception(f"WARNING: No idno found for {self.atom_id}")
+            raise Exception(f"No idno found for {self.atom_id}")
         idno_id = idno.attrib.get("id")
         idno_text = idno.text
         if idno_text is None and idno_id is not None:
@@ -63,7 +77,7 @@ class XmlCharter:
             self.idno_id = idno_id
             self.idno_text = idno_text
         else:
-            raise Exception(f"WARNING: No idno parts found for {self.atom_id}")
+            raise Exception(f"No idno parts found for {self.atom_id}")
 
         # last_editor
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))

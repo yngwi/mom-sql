@@ -120,4 +120,4 @@ class XmlUser:
             try:
                 self.saved_charters.append(SavedCharter(saved))
             except Exception as e:
-                print(f"WARNING: Cannot parse saved charter for user {self.email}: {e}")
+                print(f"Cannot parse saved charter for user {self.email}: {e}")

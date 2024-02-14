@@ -1,11 +1,8 @@
-import re
 from datetime import datetime
 from typing import List
 
-import validators
 from lxml import etree
 
-from modules.constants import NAMESPACES
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_fond import XmlFond
@@ -28,16 +25,17 @@ class XmlSavedCharter(XmlCharter):
     ):
         parts = file.rsplit(".xml")[0].split("#")
         if len(parts) < 4 or len(parts) > 5:
-            raise Exception(
-                f"WARNING: Cannot extract url from saved charter file {file}"
-            )
+            raise Exception(f"Cannot extract url from saved charter file {file}")
         parts = parts[2:]
 
         # url
-        charter_url = f"https://www.monasterium.net/mom/saved-charter?id=tag:www.monasterium.net,2011:/charter/{"/".join(parts)}"
+        url = join_url_parts(
+            "https://www.monasterium.net/mom/saved-charter?id=tag:www.monasterium.net,2011:/charter",
+            *parts,
+        )
 
-        # images
-        images = []
+        # image_base
+        image_base: None | str = None
         # collection charter
         if len(parts) == 2:
             collection_file = parts[0]
@@ -51,20 +49,9 @@ class XmlSavedCharter(XmlCharter):
             )
             if collection is None:
                 raise Exception(
-                    f"WARNING: Cannot find collection {collection_file} for saved charter file {file}"
+                    f"Cannot find collection {collection_file} for saved charter file {file}"
                 )
-            for graphic in cei.findall(".//cei:graphic", NAMESPACES):
-                url = graphic.attrib.get("url")
-                if url:
-                    full_url = (
-                        url
-                        if url.startswith("http")
-                        else join_url_parts(collection.image_base, url)
-                        if collection.image_base is not None
-                        else None
-                    )
-                    if full_url and validators.url(full_url):
-                        images.append(full_url)
+            image_base = collection.image_base
         # fond charter
         elif len(parts) == 3:
             archive_file = parts[0]
@@ -79,20 +66,9 @@ class XmlSavedCharter(XmlCharter):
             )
             if fond is None:
                 raise Exception(
-                    f"WARNING: Cannot find fond {archive_file}/{fond_file} for saved charter file {file}"
+                    f"Cannot find fond {archive_file}/{fond_file} for saved charter file {file}"
                 )
-            for graphic in cei.findall(".//cei:graphic", NAMESPACES):
-                url = graphic.attrib.get("url")
-                if url:
-                    full_url = (
-                        url
-                        if url.startswith("http")
-                        else join_url_parts(fond.image_base, url)
-                        if fond.image_base is not None
-                        else None
-                    )
-                    if full_url and validators.url(full_url):
-                        images.append(full_url)
+            image_base = fond.image_base
 
         # init base charter
-        super().__init__(file, cei, images, charter_url, users, XmlSavedCharter)
+        super().__init__(file, cei, image_base, url, users, XmlSavedCharter)

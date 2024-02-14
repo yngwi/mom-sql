@@ -33,10 +33,9 @@ class XmlFond:
         self.file = file
 
         # atom_id
-        atom_id = ead.find("./atom:id", NAMESPACES)
-        assert atom_id is not None
-        assert atom_id.text is not None
-        self.atom_id = atom_id.text
+        atom_id = ead.findtext("./atom:id", "", NAMESPACES)
+        assert atom_id != ""
+        self.atom_id = atom_id
 
         # archive_id
         self.archive_id = archive.id
@@ -58,10 +57,10 @@ class XmlFond:
         unititle = ead.find(".//ead:unittitle", NAMESPACES)
         assert unititle is not None
         if unititle.text is None:
-            self.title = self.identifier
+            title = self.identifier
         else:
-            self.title = unititle.text
-        self.title = normalize_string(self.title)
+            title = unititle.text
+        self.title = normalize_string(title)
 
         if archive.oai is not None:
             for fond in archive.oai.fonds:
@@ -70,22 +69,19 @@ class XmlFond:
 
         if prefs is not None:
             # free_image_access
-            free_image_access = prefs.find(
-                "./xrx:param[@name='image-access']", NAMESPACES
+            free_image_access = prefs.findtext(
+                "./xrx:param[@name='image-access']", "", NAMESPACES
             )
             self.free_image_access = (
-                False
-                if (free_image_access is None or free_image_access.text is None)
-                else free_image_access.text == "free"
+                False if (free_image_access == "") else free_image_access == "free"
             )
 
             # image_base
-            image_base = prefs.find(
-                "./xrx:param[@name='image-server-base-url']", NAMESPACES
+            image_base = prefs.findtext(
+                "./xrx:param[@name='image-server-base-url']", "", NAMESPACES
             )
             self.image_base = (
                 None
-                if (image_base is None or image_base.text is None)
-                or not validators.url(image_base.text)
-                else image_base.text
+                if image_base == "" or not validators.url(image_base)
+                else image_base
             )

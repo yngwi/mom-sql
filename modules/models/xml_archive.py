@@ -49,10 +49,9 @@ class XmlArchive:
         self.file = file
 
         # atom_id
-        atom_id = eag.find("./atom:id", NAMESPACES)
-        assert atom_id is not None
-        assert atom_id.text is not None
-        self.atom_id = atom_id.text
+        atom_id = eag.findtext("./atom:id", "", NAMESPACES)
+        assert atom_id != ""
+        self.atom_id = atom_id
 
         # repository_id
         id = eag.find(".//eag:repositorid", NAMESPACES)
@@ -66,10 +65,9 @@ class XmlArchive:
         self.countrycode = countrycode
 
         # name
-        name = eag.find(".//eag:autform", NAMESPACES)
-        assert name is not None
-        assert name.text is not None
-        self.name = normalize_string(name.text)
+        name = eag.findtext(".//eag:autform", "", NAMESPACES)
+        assert name != ""
+        self.name = normalize_string(name)
 
         # oai
         self.oai = None if oai is None else Oai(oai)

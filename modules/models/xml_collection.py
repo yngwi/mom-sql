@@ -28,10 +28,9 @@ class XmlCollection:
         self.file = file
 
         # atom_id
-        atom_id = cei.find("./atom:id", NAMESPACES)
-        assert atom_id is not None
-        assert atom_id.text is not None
-        self.atom_id = str(atom_id.text)
+        atom_id = cei.findtext("./atom:id", "", NAMESPACES)
+        assert atom_id != ""
+        self.atom_id = atom_id
 
         # identifier
         self.identifier = self.atom_id.rsplit("/", 1)[-1]
@@ -39,11 +38,14 @@ class XmlCollection:
         # title
         provenance = cei.find(".//cei:provenance", NAMESPACES)
         assert provenance is not None
+        # Only get direct child text without any nested tags
         text = normalize_string(provenance.xpath("./text()")[0])
         if text == "":
-            title = cei.find(".//cei:title", NAMESPACES)
-            if title is not None and title.text is not None:
-                text = normalize_string(title.text)
+            # If there is no provenance, try to get the title
+            title = cei.findtext(".//cei:title", "", NAMESPACES)
+            if title != "":
+                text = normalize_string(title)
+            # If there is no title, use the identifier
             else:
                 text = self.identifier
         self.title = text
@@ -52,17 +54,12 @@ class XmlCollection:
         self.oai_shared = False
 
         # image_base
-        address = cei.find(".//cei:image_server_address", NAMESPACES)
-        folder = cei.find(".//cei:image_server_folder", NAMESPACES)
-        if address is not None and address.text is not None:
-            address_text = address.text
-            if address_text == "images.monasterium.net":
-                address_text = "http://images.monasterium.net"
-            url = (
-                join_url_parts(address_text, folder.text)
-                if folder is not None and folder.text is not None
-                else address.text
-            )
+        address = cei.findtext(".//cei:image_server_address", "", NAMESPACES)
+        folder = cei.findtext(".//cei:image_server_folder", "", NAMESPACES)
+        if address != "":
+            if address == "images.monasterium.net":
+                address = "http://images.monasterium.net"
+            url = join_url_parts(address, folder) if folder != "" else address
             if validators.url(url):
                 self.image_base = url
 

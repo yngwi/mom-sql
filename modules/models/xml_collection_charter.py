@@ -1,9 +1,7 @@
 from typing import List
 
-import validators
 from lxml import etree
 
-from modules.constants import NAMESPACES
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_user import XmlUser
@@ -21,21 +19,6 @@ class XmlCollectionCharter(XmlCharter):
         cei: etree._ElementTree,
         users: List[XmlUser],
     ):
-        # images
-        images = []
-        for graphic in cei.findall(".//cei:graphic", NAMESPACES):
-            url = graphic.attrib.get("url")
-            if url:
-                full_url = (
-                    url
-                    if url.startswith("http")
-                    else join_url_parts(collection.image_base, url)
-                    if collection.image_base is not None
-                    else None
-                )
-                if full_url and validators.url(full_url):
-                    images.append(full_url)
-
         # url
         url = join_url_parts(
             "https://www.monasterium.net/mom",
@@ -45,7 +28,7 @@ class XmlCollectionCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(file, cei, images, url, users)
+        super().__init__(file, cei, collection.image_base, url, users)
 
         # collection_id
         self.collection_id = collection.id
