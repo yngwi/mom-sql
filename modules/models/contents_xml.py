@@ -6,6 +6,11 @@ from lxml import etree
 from modules.constants import NAMESPACES
 
 
+def _correct_filename(filename: str) -> str:
+    """Makes sure the filename in the XML matches the actual filename in the zip."""
+    return filename.replace("&amp;", "&")
+
+
 class ContentEntryType(Enum):
     COLLECTION = "collection"
     RESOURCE = "resource"
@@ -22,7 +27,7 @@ class ContentEntry:
         self.name = name
         file = element.get("filename")
         assert file is not None
-        self.file = file
+        self.file = _correct_filename(file)
         self.type = (
             ContentEntryType.COLLECTION if collection else ContentEntryType.RESOURCE
         )
