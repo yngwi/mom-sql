@@ -1,5 +1,6 @@
 lxml
 psycopg
 psycopg-binary
+python-dateutil
 types-lxml
 validators

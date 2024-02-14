@@ -4,9 +4,12 @@ from modules.models.charter_db import CharterDb
 from modules.models.images_file import ImagesFile
 from modules.models.mom_backup import MomBackup
 
+# Backup settings
 backup_zip = "./data/full20240202-1515.zip"
 # backup_zip = "./data/full20210819-0400.zip"
-files_path = "./data/filelist_20240209.txt"
+
+# Image file list settings
+image_files_path = "./data/filelist_20240209.txt"
 
 # Postgres settings
 pg_password = os.environ.get("PG_PW")
@@ -14,12 +17,8 @@ pg_host = os.environ.get("PG_HOST")
 
 
 with CharterDb(pg_host, pg_password) as db:
+    print(f"Transforming backup {backup_zip} and importing into database {pg_host}...")
     with MomBackup(backup_zip) as backup:
-        print(
-            f"Transforming backup {backup_zip} and importing into database {pg_host}..."
-        )
-
-        # db.setup_db(["users", "user_charter_bookmarks"])
         db.setup_db()
 
         # insert users
@@ -29,7 +28,7 @@ with CharterDb(pg_host, pg_password) as db:
         db.insert_users(users)
 
         # insert images
-        images = ImagesFile(files_path).list_images()
+        images = ImagesFile(image_files_path).list_images()
         print("Images listed: ", len(images))
         db.insert_images(images)
         print("Images inserted")
@@ -62,3 +61,9 @@ with CharterDb(pg_host, pg_password) as db:
         # insert user bookmarks
         print("Inserting user charter bookmarks...")
         db.insert_user_charter_bookmarks(users)
+
+        # insert saved charters
+        print("Listing saved charters...")
+        saved_charters = backup.list_saved_charters(users, fonds, collections)
+        print("Inserting saved charters...")
+        db.insert_saved_charters(saved_charters)

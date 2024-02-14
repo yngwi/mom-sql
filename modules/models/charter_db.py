@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List, Tuple
 
 import psycopg
 from psycopg import sql
@@ -8,6 +8,7 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 
 SETUP_QUERIES = """
@@ -57,13 +58,28 @@ SETUP_QUERIES = """
     CREATE TABLE IF NOT EXISTS charters (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL UNIQUE,
-        idno_norm TEXT NOT NULL,
+        idno_id TEXT NOT NULL,
         idno_text TEXT NOT NULL,
         url TEXT NOT NULL,
         last_editor_id INTEGER,
         FOREIGN KEY (last_editor_id) REFERENCES users(id)
     );
     CREATE INDEX ON charters (last_editor_id);
+
+    CREATE TABLE IF NOT EXISTS saved_charters (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL UNIQUE,
+        editor_id INTEGER NOT NULL,
+        idno_id TEXT NOT NULL,
+        idno_text TEXT NOT NULL,
+        is_released BOOLEAN NOT NULL DEFAULT FALSE,
+        original_charter_id INTEGER NOT NULL,
+        start_time TIMESTAMP NOT NULL,
+        url TEXT NOT NULL,
+        FOREIGN KEY (editor_id) REFERENCES users(id),
+        FOREIGN KEY (original_charter_id) REFERENCES charters(id)
+    );
+    CREATE INDEX ON saved_charters (editor_id);
 
     CREATE TABLE IF NOT EXISTS collections_charters (
         collection_id INTEGER NOT NULL,
@@ -100,6 +116,16 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON charters_images (charter_id);
     CREATE INDEX ON charters_images (image_id);
+
+    CREATE TABLE IF NOT EXISTS saved_charters_images (
+        saved_charter_id INTEGER NOT NULL,
+        image_id INTEGER NOT NULL,
+        FOREIGN KEY (saved_charter_id) REFERENCES saved_charters(id),
+        FOREIGN KEY (image_id) REFERENCES images(id),
+        PRIMARY KEY (saved_charter_id, image_id)
+    );
+    CREATE INDEX ON saved_charters_images (saved_charter_id);
+    CREATE INDEX ON saved_charters_images (image_id);
 
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
@@ -205,10 +231,11 @@ class CharterDb:
             ]
             for collection in collections
         ]
-        self._cur.executemany(
-            "INSERT INTO collections (id, atom_id, has_linked_fonds, identifier, image_base, oai_shared, title) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            records,
-        )
+        with self._cur.copy(
+            "COPY collections (id, atom_id, has_linked_fonds, identifier, image_base, oai_shared, title) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
 
     def insert_archives(self, archives: List[XmlArchive]):
         if not self._con or not self._cur:
@@ -224,10 +251,11 @@ class CharterDb:
             ]
             for archive in archives
         ]
-        self._cur.executemany(
-            "INSERT INTO archives (id, atom_id, country_code, name, oai_shared, repository_id) VALUES (%s, %s, %s, %s, %s, %s)",
-            records,
-        )
+        with self._cur.copy(
+            "COPY archives (id, atom_id, country_code, name, oai_shared, repository_id) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
         self._con.commit()
 
     def insert_fonds(self, fonds: List[XmlFond]):
@@ -246,37 +274,111 @@ class CharterDb:
             ]
             for fond in fonds
         ]
+        with self._cur.copy(
+            "COPY fonds (id, archive_id, atom_id, free_image_access, identifier, image_base, oai_shared, title) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
+        self._con.commit()
+
+    def insert_saved_charters(self, charters: List[XmlSavedCharter]):
+        if not self._con or not self._cur:
+            return
+        original_charter_atom_ids = [charter.atom_id for charter in charters]
+        self._cur.execute(
+            "SELECT id, atom_id FROM charters WHERE atom_id = ANY(%s)",
+            (original_charter_atom_ids,),
+        )
+        atom_id_to_charter_id_map = {
+            atom_id: id for id, atom_id in self._cur.fetchall()
+        }
+        valid_charters = []
+        charter_records = []
+        for charter in charters:
+            if charter.url is None:
+                print(f"URL not found for saved charter {charter.atom_id}")
+                continue
+            original_id = atom_id_to_charter_id_map.get(charter.atom_id, None)
+            if original_id is None:
+                print(f"Original charter not found for saved charter {charter.atom_id}")
+                continue
+            charter_records.append(
+                [
+                    charter.id,
+                    charter.atom_id,
+                    charter.editor_id,
+                    charter.idno_id,
+                    charter.idno_text,
+                    charter.released,
+                    original_id,
+                    charter.start_time,
+                    charter.url,
+                ]
+            )
+            valid_charters.append(charter)
+        with self._cur.copy(
+            "COPY saved_charters (id, atom_id, editor_id, idno_id, idno_text, is_released, original_charter_id, start_time, url) FROM STDIN"
+        ) as copy:
+            for record in charter_records:
+                copy.write_row(record)
+        image_records = [
+            [image, "images.monasterium.net" not in image]
+            for charter in valid_charters
+            for image in charter.images
+        ]
         self._cur.executemany(
-            "INSERT INTO fonds (id, archive_id, atom_id, free_image_access, identifier, image_base, oai_shared, title) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            records,
+            "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
+            image_records,
+        )
+        unique_urls = list(
+            set([image for charter in valid_charters for image in charter.images])
+        )
+        self._cur.execute(
+            "SELECT url, id FROM images WHERE url = ANY(%s)", (unique_urls,)
+        )
+        url_to_id_map = {url: id for url, id in self._cur.fetchall()}
+        charters_images_records = [
+            (charter.id, url_to_id_map[image])
+            for charter in valid_charters
+            for image in charter.images
+            if image in url_to_id_map
+        ]
+        self._cur.executemany(
+            "INSERT INTO saved_charters_images (saved_charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            charters_images_records,
         )
         self._con.commit()
 
     def insert_collections_charters(self, charters: List[XmlCollectionCharter]):
         if not self._con or not self._cur:
             return
+        # Insert charters
         charter_records = [
             [
                 charter.id,
                 charter.atom_id,
-                charter.idno_norm,
+                charter.idno_id,
                 charter.idno_text,
                 charter.url,
                 charter.last_editor_id,
             ]
             for charter in charters
         ]
-        self._cur.executemany(
-            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url, last_editor_id) VALUES (%s, %s, %s, %s, %s, %s)",
-            charter_records,
-        )
+        with self._cur.copy(
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+        ) as copy:
+            for record in charter_records:
+                copy.write_row(record)
+        # Insert collections_charters
         collections_charters_records = [
             [charter.collection_id, charter.id] for charter in charters
         ]
-        self._cur.executemany(
-            "INSERT INTO collections_charters (collection_id, charter_id) VALUES (%s, %s)",
-            collections_charters_records,
-        )
+        with self._cur.copy(
+            "COPY collections_charters (collection_id, charter_id) FROM STDIN"
+        ) as copy:
+            for record in collections_charters_records:
+                copy.write_row(record)
+        # Insert images
         image_records = [
             [image, "images.monasterium.net" not in image]
             for charter in charters
@@ -286,6 +388,7 @@ class CharterDb:
             "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
             image_records,
         )
+        # Insert charters_images
         unique_urls = list(
             set([image for charter in charters for image in charter.images])
         )
@@ -312,22 +415,27 @@ class CharterDb:
             [
                 charter.id,
                 charter.atom_id,
-                charter.idno_norm,
+                charter.idno_id,
                 charter.idno_text,
                 charter.url,
                 charter.last_editor_id,
             ]
             for charter in charters
         ]
-        self._cur.executemany(
-            "INSERT INTO charters (id, atom_id, idno_norm, idno_text, url, last_editor_id) VALUES (%s, %s, %s, %s, %s, %s)",
-            charter_records,
-        )
+        # Insert charters
+        with self._cur.copy(
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+        ) as copy:
+            for record in charter_records:
+                copy.write_row(record)
+        # Insert fonds_charters
         fonds_charters_records = [[charter.fond_id, charter.id] for charter in charters]
-        self._cur.executemany(
-            "INSERT INTO fonds_charters (fond_id, charter_id) VALUES (%s, %s)",
-            fonds_charters_records,
-        )
+        with self._cur.copy(
+            "COPY fonds_charters (fond_id, charter_id) FROM STDIN"
+        ) as copy:
+            for record in fonds_charters_records:
+                copy.write_row(record)
+        # Insert images
         image_records = [
             [image, "images.monasterium.net" not in image]
             for charter in charters
@@ -337,6 +445,7 @@ class CharterDb:
             "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
             image_records,
         )
+        # Insert charters_images
         unique_urls = list(
             set([image for charter in charters for image in charter.images])
         )
@@ -359,11 +468,13 @@ class CharterDb:
     def insert_images(self, images: List[str]):
         if not self._con or not self._cur:
             return
-        records = [[image, "images.monasterium.net" not in image] for image in images]
-        self._cur.executemany(
-            "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
-            records,
-        )
+        records_dict: Dict[str, Tuple[str, bool]] = {
+            image: (image, "images.monasterium.net" not in image) for image in images
+        }
+        records = list(records_dict.values())
+        with self._cur.copy("COPY images (url, is_external) FROM STDIN") as copy:
+            for record in records:
+                copy.write_row(record)
         self._con.commit()
 
     def insert_users(self, users: List[XmlUser]):
@@ -379,10 +490,11 @@ class CharterDb:
             ]
             for user in users
         ]
-        self._cur.executemany(
-            "INSERT INTO users (id, email, first_name, name) VALUES (%s, %s, %s, %s)",
-            records,
-        )
+        with self._cur.copy(
+            "COPY users (id, email, first_name, name) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
         moderated_records = []
         for user in users:
             moderator_email = user.moderater_email

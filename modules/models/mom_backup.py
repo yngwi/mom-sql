@@ -9,6 +9,7 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 
 
@@ -224,3 +225,48 @@ class MomBackup:
                 pass
 
         return list(charters.values())
+
+    def list_saved_charters(
+        self,
+        users: List[XmlUser],
+        fonds: List[XmlFond],
+        collections: List[XmlCollection],
+    ):
+        if not self.zip:
+            return []
+        charters_map: Dict[str, XmlSavedCharter] = {}
+        contents_path = "db/mom-data/metadata.charter.saved/__contents__.xml"
+        with self.zip.open(contents_path) as saved_contents:
+            saved_resources = ContentsXml(etree.parse(saved_contents)).resources
+            for saved_entry in saved_resources:
+                saved_file = correct_filename(saved_entry.file)
+                contents_path = f"db/mom-data/metadata.charter.saved/{saved_file}"
+                cei: None | etree._ElementTree = None
+                try:
+                    with self.zip.open(contents_path) as cei_contents:
+                        cei = etree.parse(cei_contents)
+                except KeyError:
+                    print(f"Failed to open charter {contents_path}")
+                assert cei is not None
+                try:
+                    charter = XmlSavedCharter(
+                        saved_file, cei, users, fonds, collections
+                    )
+                    if charter.atom_id in charters_map:
+                        print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                        continue
+                    else:
+                        charters_map[charter.atom_id] = charter
+                except Exception as e:
+                    print(f"Failed to create charter {contents_path}: {e}")
+                    continue
+        charters: List[XmlSavedCharter] = []
+        for user in users:
+            for saved in user.saved_charters:
+                if saved.atom_id in charters_map:
+                    charter = charters_map[saved.atom_id]
+                    charter.editor_id = user.id
+                    charter.start_time = saved.start_time
+                    charter.released = saved.released
+                    charters.append(charter)
+        return charters
