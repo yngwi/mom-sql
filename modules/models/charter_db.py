@@ -130,12 +130,14 @@ SETUP_QUERIES = """
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
         charter_id INTEGER NOT NULL,
+        note TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (charter_id) REFERENCES charters(id),
         PRIMARY KEY (user_id, charter_id)
     );
     CREATE INDEX ON user_charter_bookmarks (user_id);
     CREATE INDEX ON user_charter_bookmarks (charter_id);
+    CREATE INDEX ON user_charter_bookmarks (note);
 """
 
 
@@ -512,24 +514,24 @@ class CharterDb:
     def insert_user_charter_bookmarks(self, users: List[XmlUser]):
         if not self._con or not self._cur:
             return
-        unique_atom_ids = list(
-            set([bookmark for user in users for bookmark in user.bookmark_atom_ids])
+        unique_atom_ids: List[str] = list(
+            set([bookmark.atom_id for user in users for bookmark in user.bookmarks])
         )
         self._cur.execute(
             "SELECT atom_id, id FROM charters WHERE atom_id = ANY(%s)",
             (unique_atom_ids,),
         )
-        atom_id_to_charter_id_map = {
+        atom_id_to_charter_id_map: Dict[str, int] = {
             atom_id: charter_id for atom_id, charter_id in self._cur.fetchall()
         }
         user_bookmarks_records = [
-            (user.id, atom_id_to_charter_id_map[bookmark])
+            (user.id, atom_id_to_charter_id_map[bookmark.atom_id], bookmark.note)
             for user in users
-            for bookmark in user.bookmark_atom_ids
-            if bookmark in atom_id_to_charter_id_map
+            for bookmark in user.bookmarks
+            if bookmark.atom_id in atom_id_to_charter_id_map
         ]
         self._cur.executemany(
-            "INSERT INTO user_charter_bookmarks (user_id, charter_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            "INSERT INTO user_charter_bookmarks (user_id, charter_id, note) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
             user_bookmarks_records,
         )
         self._con.commit()

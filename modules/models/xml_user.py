@@ -1,11 +1,20 @@
 from datetime import datetime
-from typing import List
+from typing import Dict, List
 
 from lxml import etree
 
 from modules.constants import NAMESPACES
 from modules.models.serial_id_generator import SerialIDGenerator
 from modules.utils import normalize_string, parse_date
+
+
+class Bookmark:
+    atom_id: str
+    note: None | str = None
+
+    def __init__(self, atom_id: str, note: None | str = None):
+        self.atom_id = atom_id
+        self.note = note
 
 
 class SavedCharter:
@@ -32,7 +41,7 @@ class SavedCharter:
 
 
 class XmlUser:
-    bookmark_atom_ids: List[str]
+    bookmarks: List[Bookmark]
     email: str
     file: str
     first_name: None | str = None
@@ -41,7 +50,12 @@ class XmlUser:
     name: None | str = None
     saved_charters: List[SavedCharter]
 
-    def __init__(self, file: str, xrx: etree._ElementTree):
+    def __init__(
+        self,
+        file: str,
+        xrx: etree._ElementTree,
+        bookmark_notes: List[etree._ElementTree],
+    ):
         # id
         self.id = SerialIDGenerator().get_serial_id(XmlUser)
 
@@ -76,9 +90,19 @@ class XmlUser:
                 ).replace("g.vogeler@lrz.uni-graz.at", "g.vogeler@lrz.uni-muenchen.de")
             )
 
-        # bookmark_atom_ids
-        self.bookmark_atom_ids = [
-            bookmark.text
+        # bookmarks
+        notes: Dict[str, str] = {}
+        for note in bookmark_notes:
+            note_id = note.findtext("./xrx:bookmark", "", NAMESPACES)
+            note_text = note.findtext("./xrx:note", "", NAMESPACES)
+            if note_id == "" or note_text == "":
+                continue
+            escaped_note_id = note_id.replace(
+                "tag%3Awww.monasterium.net%2C2011%3A", "tag:www.monasterium.net,2011:"
+            )
+            notes[escaped_note_id] = note_text
+        self.bookmarks = [
+            Bookmark(bookmark.text, notes.get(bookmark.text, None))
             for bookmark in xrx.findall(".//xrx:bookmark", NAMESPACES)
             if bookmark.text
         ]

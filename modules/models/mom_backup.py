@@ -64,6 +64,30 @@ class MomBackup:
         )
         return ContentsXml(self._get_xml(path))
 
+    def _list_resource_paths(self, base_path: str) -> List[str]:
+        """
+        Recursively lists all paths to resources within any subfolders from the given `base_path`.
+        """
+        resource_paths: List[str] = []
+        try:
+            contents = self._get_contents(base_path)
+            for resource in contents.resources:
+                resource_path = join_url_parts(base_path, resource.file)
+                resource_paths.append(resource_path)
+            for collection in contents.collections:
+                collection_path = join_url_parts(base_path, collection.file)
+                resource_paths.extend(self._list_resource_paths(collection_path))
+            return resource_paths
+        except KeyError:
+            return []
+
+    def _list_resources(self, base_path: str) -> List[etree._ElementTree]:
+        """
+        Recursively lists all resources within any subfolders from the given `base_path`.
+        """
+        resource_paths = self._list_resource_paths(base_path)
+        return [self._get_xml(path) for path in resource_paths]
+
     def list_users(self) -> List[XmlUser]:
         users: Dict[str, XmlUser] = {}
         contents_path = "db/mom-data/xrx.user"
@@ -77,8 +101,13 @@ class MomBackup:
                     f"Different case for {file}. Potential conflict with {users[file_lower].file}. Skipping."
                 )
                 continue
+            user_base_path = f"db/mom-data/xrx.user/{file.rsplit(".xml")[0]}"
             xrx = self._get_xml(f"db/mom-data/xrx.user/{file}")
-            users[file_lower] = XmlUser(file, xrx)
+            bookmark_notes_path = join_url_parts(
+                user_base_path, "metadata.bookmark-notes"
+            )
+            bookmark_notes = self._list_resources(bookmark_notes_path)
+            users[file_lower] = XmlUser(file, xrx, bookmark_notes)
         return list(users.values())
 
     def list_archives(self) -> List[XmlArchive]:
