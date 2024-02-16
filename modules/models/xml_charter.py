@@ -14,8 +14,8 @@ class XmlCharter:
     file: str
     last_editor_id: None | int = None
     id: int
-    idno_id: str
-    idno_text: str
+    idno_id: None | str = None
+    idno_text: None | str = None
     images: List[str]
     url: str
 
@@ -63,21 +63,18 @@ class XmlCharter:
 
         # idno
         idno = cei.find(".//cei:idno", NAMESPACES)
-        if idno is None:
-            raise Exception(f"No idno found for {self.atom_id}")
-        idno_id = idno.attrib.get("id")
-        idno_text = idno.text
-        if idno_text is None and idno_id is not None:
-            self.idno_id = idno_id
-            self.idno_text = idno_id
-        elif idno_text is not None and idno_id is None:
-            self.idno_id = idno_text
-            self.idno_text = idno_text
-        elif idno_text is not None and idno_id is not None:
-            self.idno_id = idno_id
-            self.idno_text = idno_text
-        else:
-            raise Exception(f"No idno parts found for {self.atom_id}")
+        if idno is not None:
+            idno_id = idno.attrib.get("id")
+            idno_text = idno.text
+            if idno_text is None and idno_id is not None:
+                self.idno_id = idno_id
+                self.idno_text = idno_id
+            elif idno_text is not None and idno_id is None:
+                self.idno_id = idno_text
+                self.idno_text = idno_text
+            elif idno_text is not None and idno_id is not None:
+                self.idno_id = idno_id
+                self.idno_text = idno_text
 
         # last_editor
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))

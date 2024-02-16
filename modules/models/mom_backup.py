@@ -1,14 +1,16 @@
 import zipfile
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 from lxml import etree
 
 from modules.models.contents_xml import ContentsXml
 from modules.models.xml_archive import XmlArchive
+from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_mycharter import XmlMycharter
 from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
@@ -249,6 +251,41 @@ class MomBackup:
                     charter.released = saved.released
                     charters.append(charter)
         return charters
+
+    def list_private_charters(
+        self,
+        users: List[XmlUser],
+        private_mycollections: List[XmlMycollection],
+        charters: Sequence[XmlCharter],
+    ) -> List[XmlMycharter]:
+        mycharters: Dict[str, XmlMycharter] = {}
+        charters_map: Dict[str, XmlCharter] = {c.atom_id: c for c in charters}
+        for user in users:
+            for mycollection in private_mycollections:
+                if mycollection.author_email != user.email:
+                    continue
+                charters_path = f"db/mom-data/xrx.user/{user.email}/metadata.charter/{mycollection.identifier}"
+                for path in self._list_resource_paths(charters_path):
+                    file = path.rsplit("/")[0]
+                    cei = self._get_xml(path)
+                    try:
+                        charter = XmlMycharter(file, cei, mycollection)
+                        if charter.atom_id in mycharters:
+                            original = mycharters[charter.atom_id]
+                            print(
+                                f"Duplicate private charter {charter.atom_id} in {mycollection.author_email}/{mycollection.atom_id}. Same atom id as {original.owner_atom_id}/{original.atom_id}. Skipping."
+                            )
+                            continue
+                        if charter.source_atom_id is not None:
+                            source_charter = charters_map.get(
+                                charter.source_atom_id, None
+                            )
+                            if source_charter is not None:
+                                charter.set_source_charter(source_charter)
+                        mycharters[charter.atom_id] = charter
+                    except Exception as e:
+                        print(f"Failed to create mycharter {path}: {e}")
+        return list(mycharters.values())
 
     def list_private_mycollections(self, users: List[XmlUser]) -> List[XmlMycollection]:
         my_collections: Dict[str, XmlMycollection] = {}

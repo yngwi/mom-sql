@@ -8,6 +8,7 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_mycharter import XmlMycharter
 from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
@@ -67,8 +68,8 @@ SETUP_QUERIES = """
     CREATE TABLE IF NOT EXISTS charters (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL UNIQUE,
-        idno_id TEXT NOT NULL,
-        idno_text TEXT NOT NULL,
+        idno_id TEXT,
+        idno_text TEXT,
         url TEXT NOT NULL,
         last_editor_id INTEGER,
         FOREIGN KEY (last_editor_id) REFERENCES users(id)
@@ -79,8 +80,8 @@ SETUP_QUERIES = """
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL UNIQUE,
         editor_id INTEGER NOT NULL,
-        idno_id TEXT NOT NULL,
-        idno_text TEXT NOT NULL,
+        idno_id TEXT,
+        idno_text TEXT,
         is_released BOOLEAN NOT NULL DEFAULT FALSE,
         original_charter_id INTEGER NOT NULL,
         start_time TIMESTAMP NOT NULL,
@@ -155,6 +156,19 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON saved_charters_images (saved_charter_id);
     CREATE INDEX ON saved_charters_images (image_id);
+
+    CREATE TABLE IF NOT EXISTS private_charters (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL UNIQUE,
+        private_collection_id INTEGER NOT NULL,
+        idno_id TEXT,
+        idno_text TEXT,
+        source_charter_id INTEGER,
+        FOREIGN KEY (private_collection_id) REFERENCES private_collections(id),
+        FOREIGN KEY (source_charter_id) REFERENCES charters(id)
+    );
+    CREATE INDEX ON private_charters (private_collection_id);
+    CREATE INDEX ON private_charters (source_charter_id);
 
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
@@ -622,5 +636,26 @@ class CharterDb:
             "COPY collection_source (collection_id, source_collection_id) FROM STDIN"
         ) as copy:
             for record in source_records:
+                copy.write_row(record)
+        self._con.commit()
+
+    def insert_private_charters(self, private_charters: List[XmlMycharter]):
+        if not self._con or not self._cur:
+            return
+        records = [
+            [
+                charter.id,
+                charter.atom_id,
+                charter.collection_id,
+                charter.idno_id,
+                charter.idno_text,
+                charter.source_charter_id,
+            ]
+            for charter in private_charters
+        ]
+        with self._cur.copy(
+            "COPY private_charters (id, atom_id, private_collection_id, idno_id, idno_text, source_charter_id) FROM STDIN"
+        ) as copy:
+            for record in records:
                 copy.write_row(record)
         self._con.commit()
