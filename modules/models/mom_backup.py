@@ -9,6 +9,7 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts
@@ -101,10 +102,9 @@ class MomBackup:
                     f"Different case for {file}. Potential conflict with {users[file_lower].file}. Skipping."
                 )
                 continue
-            user_base_path = f"db/mom-data/xrx.user/{file.rsplit(".xml")[0]}"
             xrx = self._get_xml(f"db/mom-data/xrx.user/{file}")
-            bookmark_notes_path = join_url_parts(
-                user_base_path, "metadata.bookmark-notes"
+            bookmark_notes_path = (
+                f"db/mom-data/xrx.user/{file.rsplit(".xml")[0]}/metadata.bookmark-notes"
             )
             bookmark_notes = self._list_resources(bookmark_notes_path)
             users[file_lower] = XmlUser(file, xrx, bookmark_notes)
@@ -222,7 +222,7 @@ class MomBackup:
         users: List[XmlUser],
         fonds: List[XmlFond],
         collections: List[XmlCollection],
-    ):
+    ) -> List[XmlSavedCharter]:
         charters_map: Dict[str, XmlSavedCharter] = {}
         contents_path = "db/mom-data/metadata.charter.saved"
         for saved_entry in self._get_contents(contents_path).resources:
@@ -249,3 +249,65 @@ class MomBackup:
                     charter.released = saved.released
                     charters.append(charter)
         return charters
+
+    def list_private_mycollections(self, users: List[XmlUser]) -> List[XmlMycollection]:
+        my_collections: Dict[str, XmlMycollection] = {}
+        for user in users:
+            file = user.file
+            my_collections_path = (
+                f"db/mom-data/xrx.user/{file.rsplit(".xml")[0]}/metadata.mycollection"
+            )
+            cei_files = self._list_resources(my_collections_path)
+            for cei in cei_files:
+                mycollection = XmlMycollection(file, cei, user)
+                if mycollection.atom_id in my_collections:
+                    print(
+                        f"Duplicate mycollection {mycollection.file}/{mycollection.atom_id}. Skipping."
+                    )
+                    continue
+                my_collections[mycollection.atom_id] = mycollection
+        return list(my_collections.values())
+
+    def list_public_mycollections(
+        self, users: List[XmlUser], private_mycollections: List[XmlMycollection]
+    ) -> List[XmlMycollection]:
+        mycollections: List[XmlMycollection] = []
+        contents_path = "db/mom-data/metadata.mycollection.public"
+        for mycollection_entry in self._get_contents(contents_path).collections:
+            file = mycollection_entry.file
+            cei_path = f"db/mom-data/metadata.mycollection.public/{file}/{file}.mycollection.xml"
+            cei = self._get_xml_optional(cei_path)
+            if cei is None:
+                print(f"Failed to open mycollection cei {cei_path}")
+                continue
+            mycollection = XmlMycollection(file, cei, None, True)
+            oai_path = f"db/mom-data/metadata.mycollection.public/{file}/oai.xml"
+            oai = self._get_xml_optional(oai_path)
+            if oai is not None:
+                mycollection.oai_shared = True
+            user = next(
+                (u for u in users if u.email == mycollection.author_email), None
+            )
+            if user is None:
+                print(
+                    f"Failed to find user for mycollection {mycollection.author_email}"
+                )
+                continue
+            mycollection.set_user(user)
+            private_mycollection = next(
+                (
+                    m
+                    for m in private_mycollections
+                    if m.atom_id == mycollection.atom_id
+                    and m.author_email == user.email
+                ),
+                None,
+            )
+            if private_mycollection is None:
+                print(
+                    f"Failed to find private mycollection for {mycollection.atom_id} and {user.email}"
+                )
+                continue
+            mycollection.private_mycollection_id = private_mycollection.id
+            mycollections.append(mycollection)
+        return mycollections

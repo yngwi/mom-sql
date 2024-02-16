@@ -8,6 +8,7 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 
@@ -25,11 +26,19 @@ SETUP_QUERIES = """
     CREATE TABLE IF NOT EXISTS collections (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL UNIQUE,
-        has_linked_fonds BOOLEAN DEFAULT FALSE,
         identifier TEXT NOT NULL,
         image_base TEXT,
         oai_shared BOOLEAN DEFAULT FALSE,
         title TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS private_collections (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL UNIQUE,
+        identifier TEXT NOT NULL,
+        title TEXT NOT NULL,
+        owner_id INTEGER NOT NULL,
+        FOREIGN KEY (owner_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS archives (
@@ -100,6 +109,26 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON fonds_charters (fond_id);
     CREATE INDEX ON fonds_charters (charter_id);
+
+    CREATE TABLE IF NOT EXISTS collection_fonds (
+        collection_id INTEGER NOT NULL,
+        fond_id INTEGER NOT NULL,
+        FOREIGN KEY (collection_id) REFERENCES collections(id),
+        FOREIGN KEY (fond_id) REFERENCES fonds(id),
+        PRIMARY KEY (collection_id, fond_id)
+    );
+    CREATE INDEX ON collection_fonds (collection_id);
+    CREATE INDEX ON collection_fonds (fond_id);
+
+    CREATE TABLE IF NOT EXISTS collection_source (
+        collection_id INTEGER NOT NULL,
+        source_collection_id INTEGER NOT NULL,
+        FOREIGN KEY (collection_id) REFERENCES collections(id),
+        FOREIGN KEY (source_collection_id) REFERENCES private_collections(id),
+        PRIMARY KEY (collection_id, source_collection_id)
+    );
+    CREATE INDEX ON collection_source (collection_id);
+    CREATE INDEX ON collection_source (source_collection_id);
 
     CREATE TABLE IF NOT EXISTS images (
         id SERIAL PRIMARY KEY,
@@ -225,7 +254,6 @@ class CharterDb:
             [
                 collection.id,
                 collection.atom_id,
-                len(collection.linked_fonds) > 0,
                 collection.identifier,
                 collection.image_base,
                 collection.oai_shared,
@@ -234,10 +262,21 @@ class CharterDb:
             for collection in collections
         ]
         with self._cur.copy(
-            "COPY collections (id, atom_id, has_linked_fonds, identifier, image_base, oai_shared, title) FROM STDIN"
+            "COPY collections (id, atom_id, identifier, image_base, oai_shared, title) FROM STDIN"
         ) as copy:
             for record in records:
                 copy.write_row(record)
+        fonds_records = [
+            (collection.id, fond_id)
+            for collection in collections
+            for fond_id in collection.linked_fonds
+        ]
+        with self._cur.copy(
+            "COPY collection_fonds (collection_id, fond_id) FROM STDIN"
+        ) as copy:
+            for record in fonds_records:
+                copy.write_row(record)
+        self._con.commit()
 
     def insert_archives(self, archives: List[XmlArchive]):
         if not self._con or not self._cur:
@@ -534,4 +573,54 @@ class CharterDb:
             "INSERT INTO user_charter_bookmarks (user_id, charter_id, note) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
             user_bookmarks_records,
         )
+        self._con.commit()
+
+    def insert_private_collections(self, mycollections: List[XmlMycollection]):
+        if not self._con or not self._cur:
+            return
+        records = [
+            [
+                mycollection.id,
+                mycollection.atom_id,
+                mycollection.identifier,
+                mycollection.title,
+                mycollection.owner_id,
+            ]
+            for mycollection in mycollections
+        ]
+        with self._cur.copy(
+            "COPY private_collections (id, atom_id, identifier, title, owner_id) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
+        self._con.commit()
+
+    def insert_public_collections(self, mycollections: List[XmlMycollection]):
+        if not self._con or not self._cur:
+            return
+        records = [
+            [
+                mycollection.id,
+                mycollection.atom_id,
+                mycollection.identifier,
+                mycollection.oai_shared,
+                mycollection.title,
+            ]
+            for mycollection in mycollections
+        ]
+        with self._cur.copy(
+            "COPY collections (id, atom_id, identifier, oai_shared, title) FROM STDIN"
+        ) as copy:
+            for record in records:
+                copy.write_row(record)
+        source_records = [
+            (mycollection.id, mycollection.private_mycollection_id)
+            for mycollection in mycollections
+            if mycollection.private_mycollection_id is not None
+        ]
+        with self._cur.copy(
+            "COPY collection_source (collection_id, source_collection_id) FROM STDIN"
+        ) as copy:
+            for record in source_records:
+                copy.write_row(record)
         self._con.commit()
