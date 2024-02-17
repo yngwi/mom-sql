@@ -13,6 +13,7 @@ class XmlCharter:
     atom_id: str
     file: str
     last_editor_id: None | int = None
+    last_editor_email: None | str = None
     id: int
     idno_id: None | str = None
     idno_text: None | str = None
@@ -76,10 +77,12 @@ class XmlCharter:
                 self.idno_id = idno_id
                 self.idno_text = idno_text
 
-        # last_editor
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))
         if email != "" and email != "guest" and email != "admin":
+            # last_editor
             self.last_editor_id = next(
                 (user.id for user in users if user.email.lower() == email.lower()),
                 None,
             )
+            # last_editor_email
+            self.last_editor_email = email

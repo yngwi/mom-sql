@@ -99,3 +99,11 @@ with CharterDb(pg_host, pg_password) as db:
         )
         print(f"** Inserting {len(public_mycollections)} public mycollections...")
         db.insert_public_collections(public_mycollections)
+
+        # insert public mycollection charters
+        print("\n** Listing public collection charters...")
+        public_charters = backup.list_public_charters(
+            private_charters, public_mycollections
+        )
+        print(f"** Inserting {len(public_charters)} public collection charters...")
+        db.insert_public_charters(public_charters)

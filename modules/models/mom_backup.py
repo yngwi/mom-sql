@@ -270,12 +270,6 @@ class MomBackup:
                     cei = self._get_xml(path)
                     try:
                         charter = XmlMycharter(file, cei, mycollection)
-                        if charter.atom_id in mycharters:
-                            original = mycharters[charter.atom_id]
-                            print(
-                                f"Duplicate private charter {charter.atom_id} in {mycollection.author_email}/{mycollection.atom_id}. Same atom id as {original.owner_atom_id}/{original.atom_id}. Skipping."
-                            )
-                            continue
                         if charter.source_atom_id is not None:
                             source_charter = charters_map.get(
                                 charter.source_atom_id, None
@@ -286,6 +280,48 @@ class MomBackup:
                     except Exception as e:
                         print(f"Failed to create mycharter {path}: {e}")
         return list(mycharters.values())
+
+    def list_public_charters(
+        self,
+        private_charters: List[XmlMycharter],
+        public_mycollections: List[XmlMycollection],
+    ) -> List[XmlCollectionCharter]:
+        charters: List[XmlCollectionCharter] = []
+        private_charters_map: Dict[str, XmlMycharter] = {
+            c.owner_email + str(c.collection_atom_id) + c.atom_id: c
+            for c in private_charters
+        }
+        for collection in public_mycollections:
+            file = collection.file
+            charters_path = f"db/mom-data/metadata.charter.public/{file}"
+            for cei_path in self._list_resource_paths(charters_path):
+                file = cei_path.rsplit("/")[-1]
+                cei = self._get_xml(cei_path)
+                try:
+                    charter = XmlCollectionCharter(file, collection, cei)
+                    print(
+                        "Key",
+                        collection.owner_email + collection.file + charter.atom_id,
+                    )
+                    source_charter = private_charters_map.get(
+                        collection.owner_email + collection.atom_id + charter.atom_id,
+                        None,
+                    )
+                    if source_charter is None:
+                        print(
+                            f"Failed to find source charter for {collection.owner_email}; {collection.atom_id}; {charter.atom_id}"
+                        )
+                        continue
+                    charter.set_source_charter(source_charter)
+                    charters.append(charter)
+                except Exception as e:
+                    print(f"Failed to create mycharter {cei_path}: {e}")
+                    continue
+        for key in list(private_charters_map.keys())[:20]:
+            c = private_charters_map[key]
+            print("key in src", key)
+            print("charter", c.atom_id, c.owner_email, c.collection_file)
+        return charters
 
     def list_private_mycollections(self, users: List[XmlUser]) -> List[XmlMycollection]:
         my_collections: Dict[str, XmlMycollection] = {}

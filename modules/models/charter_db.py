@@ -24,15 +24,6 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON users (moderator_id);
 
-    CREATE TABLE IF NOT EXISTS collections (
-        id SERIAL PRIMARY KEY,
-        atom_id TEXT NOT NULL UNIQUE,
-        identifier TEXT NOT NULL,
-        image_base TEXT,
-        oai_shared BOOLEAN DEFAULT FALSE,
-        title TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS private_collections (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL UNIQUE,
@@ -41,6 +32,19 @@ SETUP_QUERIES = """
         owner_id INTEGER NOT NULL,
         FOREIGN KEY (owner_id) REFERENCES users(id)
     );
+    CREATE INDEX ON private_collections (owner_id);
+
+    CREATE TABLE IF NOT EXISTS collections (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL UNIQUE,
+        identifier TEXT NOT NULL,
+        image_base TEXT,
+        oai_shared BOOLEAN DEFAULT FALSE,
+        source_collection_id INTEGER,
+        title TEXT NOT NULL,
+        FOREIGN KEY (source_collection_id) REFERENCES private_collections(id)
+    );
+    CREATE INDEX ON collections (source_collection_id);
 
     CREATE TABLE IF NOT EXISTS archives (
         id SERIAL PRIMARY KEY,
@@ -91,15 +95,31 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON saved_charters (editor_id);
 
+    CREATE TABLE IF NOT EXISTS private_charters (
+        id SERIAL PRIMARY KEY,
+        atom_id TEXT NOT NULL,
+        private_collection_id INTEGER NOT NULL,
+        idno_id TEXT,
+        idno_text TEXT,
+        source_charter_id INTEGER,
+        FOREIGN KEY (private_collection_id) REFERENCES private_collections(id),
+        FOREIGN KEY (source_charter_id) REFERENCES charters(id)
+    );
+    CREATE INDEX ON private_charters (private_collection_id);
+    CREATE INDEX ON private_charters (source_charter_id);
+
     CREATE TABLE IF NOT EXISTS collections_charters (
         collection_id INTEGER NOT NULL,
         charter_id INTEGER NOT NULL,
+        private_charter_id INTEGER,
         FOREIGN KEY (collection_id) REFERENCES collections(id),
         FOREIGN KEY (charter_id) REFERENCES charters(id),
+        FOREIGN KEY (private_charter_id) REFERENCES private_charters(id),
         PRIMARY KEY (collection_id, charter_id)
     );
     CREATE INDEX ON collections_charters (collection_id);
     CREATE INDEX ON collections_charters (charter_id);
+    CREATE INDEX ON collections_charters (private_charter_id);
 
     CREATE TABLE IF NOT EXISTS fonds_charters (
         fond_id INTEGER NOT NULL,
@@ -120,16 +140,6 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON collection_fonds (collection_id);
     CREATE INDEX ON collection_fonds (fond_id);
-
-    CREATE TABLE IF NOT EXISTS collection_source (
-        collection_id INTEGER NOT NULL,
-        source_collection_id INTEGER NOT NULL,
-        FOREIGN KEY (collection_id) REFERENCES collections(id),
-        FOREIGN KEY (source_collection_id) REFERENCES private_collections(id),
-        PRIMARY KEY (collection_id, source_collection_id)
-    );
-    CREATE INDEX ON collection_source (collection_id);
-    CREATE INDEX ON collection_source (source_collection_id);
 
     CREATE TABLE IF NOT EXISTS images (
         id SERIAL PRIMARY KEY,
@@ -156,19 +166,6 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON saved_charters_images (saved_charter_id);
     CREATE INDEX ON saved_charters_images (image_id);
-
-    CREATE TABLE IF NOT EXISTS private_charters (
-        id SERIAL PRIMARY KEY,
-        atom_id TEXT NOT NULL UNIQUE,
-        private_collection_id INTEGER NOT NULL,
-        idno_id TEXT,
-        idno_text TEXT,
-        source_charter_id INTEGER,
-        FOREIGN KEY (private_collection_id) REFERENCES private_collections(id),
-        FOREIGN KEY (source_charter_id) REFERENCES charters(id)
-    );
-    CREATE INDEX ON private_charters (private_collection_id);
-    CREATE INDEX ON private_charters (source_charter_id);
 
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
@@ -618,28 +615,19 @@ class CharterDb:
                 mycollection.atom_id,
                 mycollection.identifier,
                 mycollection.oai_shared,
+                mycollection.private_mycollection_id,
                 mycollection.title,
             ]
             for mycollection in mycollections
         ]
         with self._cur.copy(
-            "COPY collections (id, atom_id, identifier, oai_shared, title) FROM STDIN"
+            "COPY collections (id, atom_id, identifier, oai_shared, source_collection_id, title) FROM STDIN"
         ) as copy:
             for record in records:
                 copy.write_row(record)
-        source_records = [
-            (mycollection.id, mycollection.private_mycollection_id)
-            for mycollection in mycollections
-            if mycollection.private_mycollection_id is not None
-        ]
-        with self._cur.copy(
-            "COPY collection_source (collection_id, source_collection_id) FROM STDIN"
-        ) as copy:
-            for record in source_records:
-                copy.write_row(record)
         self._con.commit()
 
-    def insert_private_charters(self, private_charters: List[XmlMycharter]):
+    def insert_private_charters(self, charters: List[XmlMycharter]):
         if not self._con or not self._cur:
             return
         records = [
@@ -651,11 +639,71 @@ class CharterDb:
                 charter.idno_text,
                 charter.source_charter_id,
             ]
-            for charter in private_charters
+            for charter in charters
         ]
         with self._cur.copy(
             "COPY private_charters (id, atom_id, private_collection_id, idno_id, idno_text, source_charter_id) FROM STDIN"
         ) as copy:
             for record in records:
                 copy.write_row(record)
+        self._con.commit()
+
+    def insert_public_charters(self, charters: List[XmlCollectionCharter]):
+        if not self._con or not self._cur:
+            return
+        # Insert charters
+        charter_records = [
+            [
+                charter.id,
+                charter.atom_id,
+                charter.idno_id,
+                charter.idno_text,
+                charter.url,
+                charter.last_editor_id,
+            ]
+            for charter in charters
+        ]
+        with self._cur.copy(
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+        ) as copy:
+            for record in charter_records:
+                copy.write_row(record)
+        # Insert collections_charters
+        collections_charters_records = [
+            [charter.collection_id, charter.id, charter.source_mycharter_id]
+            for charter in charters
+        ]
+        with self._cur.copy(
+            "COPY collections_charters (collection_id, charter_id, private_charter_id) FROM STDIN"
+        ) as copy:
+            for record in collections_charters_records:
+                copy.write_row(record)
+        # Insert images
+        image_records = [
+            [image, "images.monasterium.net" not in image]
+            for charter in charters
+            for image in charter.images
+        ]
+        self._cur.executemany(
+            "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
+            image_records,
+        )
+        # Insert charters_images
+        unique_urls = list(
+            set([image for charter in charters for image in charter.images])
+        )
+        self._cur.execute(
+            "SELECT url, id FROM images WHERE url = ANY(%s)", (unique_urls,)
+        )
+        url_to_id_map = {url: id for url, id in self._cur.fetchall()}
+        charters_images_records = [
+            (charter.id, url_to_id_map[image])
+            for charter in charters
+            for image in charter.images
+            if image in url_to_id_map
+        ]
+        self._cur.executemany(
+            "INSERT INTO charters_images (charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            charters_images_records,
+        )
         self._con.commit()

@@ -9,9 +9,10 @@ class XmlMycharter(XmlCharter):
     source_charter_id: None | int = None
     source_atom_id: None | str = None
     owner_id: int
-    owner_atom_id: str
+    owner_email: str
     collection_id: None | int = None
     collection_atom_id: None | str = None
+    collection_file: str
 
     def __init__(
         self,
@@ -28,14 +29,17 @@ class XmlMycharter(XmlCharter):
         # owner_id
         self.owner_id = collection.owner_id
 
-        # owner_atom_id
-        self.owner_atom_id = collection.owner_email
+        # owner_email
+        self.owner_email = collection.owner_email
 
         # collection_id
         self.collection_id = collection.id
 
         # collection_atom_id
         self.collection_atom_id = collection.atom_id
+
+        # collection_file
+        self.collection_file = collection.file
 
         # atom_link
         atom_link = cei.find(".//atom:link", NAMESPACES)
