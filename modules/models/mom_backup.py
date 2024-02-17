@@ -260,13 +260,14 @@ class MomBackup:
     ) -> List[XmlMycharter]:
         mycharters: Dict[str, XmlMycharter] = {}
         charters_map: Dict[str, XmlCharter] = {c.atom_id: c for c in charters}
+        user_map: Dict[str, XmlUser] = {u.email: u for u in users}
         for user in users:
             for mycollection in private_mycollections:
                 if mycollection.author_email != user.email:
                     continue
                 charters_path = f"db/mom-data/xrx.user/{user.email}/metadata.charter/{mycollection.identifier}"
                 for path in self._list_resource_paths(charters_path):
-                    file = path.rsplit("/")[0]
+                    file = path.split("/")[-1]
                     cei = self._get_xml(path)
                     try:
                         charter = XmlMycharter(file, cei, mycollection)
@@ -276,6 +277,13 @@ class MomBackup:
                             )
                             if source_charter is not None:
                                 charter.set_source_charter(source_charter)
+                        shared_filename = file.replace(
+                            ".charter.xml", ".charter.share.xml"
+                        )
+                        shared_path = f"db/mom-data/xrx.user/{user.email}/metadata.charter.share/{mycollection.identifier}/{shared_filename}"
+                        shared_xrx = self._get_xml_optional(shared_path)
+                        if shared_xrx is not None:
+                            charter.add_shared_users(shared_xrx, user_map)
                         mycharters[charter.atom_id] = charter
                     except Exception as e:
                         print(f"Failed to create mycharter {path}: {e}")

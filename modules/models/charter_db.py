@@ -108,6 +108,16 @@ SETUP_QUERIES = """
     CREATE INDEX ON private_charters (private_collection_id);
     CREATE INDEX ON private_charters (source_charter_id);
 
+    CREATE TABLE IF NOT EXISTS private_charter_user_shares (
+        private_charter_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        FOREIGN KEY (private_charter_id) REFERENCES private_charters(id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        PRIMARY KEY (private_charter_id, user_id)
+    );
+    CREATE INDEX ON private_charter_user_shares (private_charter_id);
+    CREATE INDEX ON private_charter_user_shares (user_id);
+
     CREATE TABLE IF NOT EXISTS collections_charters (
         collection_id INTEGER NOT NULL,
         charter_id INTEGER NOT NULL,
@@ -640,6 +650,7 @@ class CharterDb:
     def insert_private_charters(self, charters: List[XmlMycharter]):
         if not self._con or not self._cur:
             return
+        # Insert charters
         records = [
             [
                 charter.id,
@@ -656,6 +667,18 @@ class CharterDb:
         ) as copy:
             for record in records:
                 copy.write_row(record)
+        # Insert user shares
+        user_shares_records = [
+            (charter.id, user_id)
+            for charter in charters
+            for user_id in charter.shared_with_user_ids
+        ]
+        with self._cur.copy(
+            "COPY private_charter_user_shares (private_charter_id, user_id) FROM STDIN"
+        ) as copy:
+            for record in user_shares_records:
+                copy.write_row(record)
+        # Insert images
         image_records = [
             [image, "images.monasterium.net" not in image]
             for charter in charters
@@ -665,6 +688,7 @@ class CharterDb:
             "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
             image_records,
         )
+        # Insert charters_images
         unique_urls = list(
             set([image for charter in charters for image in charter.images])
         )
@@ -682,7 +706,7 @@ class CharterDb:
             "INSERT INTO private_charters_images (private_charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             charters_images_records,
         )
-
+        # Commit
         self._con.commit()
 
     def insert_public_charters(self, charters: List[XmlCollectionCharter]):
