@@ -167,6 +167,16 @@ SETUP_QUERIES = """
     CREATE INDEX ON saved_charters_images (saved_charter_id);
     CREATE INDEX ON saved_charters_images (image_id);
 
+    CREATE TABLE IF NOT EXISTS private_charters_images (
+        private_charter_id INTEGER NOT NULL,
+        image_id INTEGER NOT NULL,
+        FOREIGN KEY (private_charter_id) REFERENCES private_charters(id),
+        FOREIGN KEY (image_id) REFERENCES images(id),
+        PRIMARY KEY (private_charter_id, image_id)
+    );
+    CREATE INDEX ON private_charters_images (private_charter_id);
+    CREATE INDEX ON private_charters_images (image_id);
+
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
         charter_id INTEGER NOT NULL,
@@ -646,6 +656,33 @@ class CharterDb:
         ) as copy:
             for record in records:
                 copy.write_row(record)
+        image_records = [
+            [image, "images.monasterium.net" not in image]
+            for charter in charters
+            for image in charter.images
+        ]
+        self._cur.executemany(
+            "INSERT INTO images (url, is_external) VALUES (%s, %s) ON CONFLICT (url) DO NOTHING",
+            image_records,
+        )
+        unique_urls = list(
+            set([image for charter in charters for image in charter.images])
+        )
+        self._cur.execute(
+            "SELECT url, id FROM images WHERE url = ANY(%s)", (unique_urls,)
+        )
+        url_to_id_map = {url: id for url, id in self._cur.fetchall()}
+        charters_images_records = [
+            (charter.id, url_to_id_map[image])
+            for charter in charters
+            for image in charter.images
+            if image in url_to_id_map
+        ]
+        self._cur.executemany(
+            "INSERT INTO private_charters_images (private_charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            charters_images_records,
+        )
+
         self._con.commit()
 
     def insert_public_charters(self, charters: List[XmlCollectionCharter]):

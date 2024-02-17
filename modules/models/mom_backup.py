@@ -286,7 +286,7 @@ class MomBackup:
         private_charters: List[XmlMycharter],
         public_mycollections: List[XmlMycollection],
     ) -> List[XmlCollectionCharter]:
-        charters: List[XmlCollectionCharter] = []
+        charters: Dict[str, XmlCollectionCharter] = {}
         private_charters_map: Dict[str, XmlMycharter] = {
             c.owner_email + str(c.collection_atom_id) + c.atom_id: c
             for c in private_charters
@@ -305,15 +305,20 @@ class MomBackup:
                     )
                     if source_charter is None:
                         print(
-                            f"Failed to find source charter for {collection.owner_email}; {collection.atom_id}; {charter.atom_id}"
+                            f"Failed to find private source charter for {collection.owner_email}; {collection.atom_id}; {charter.atom_id}"
+                        )
+                    else:
+                        charter.set_source_mycharter(source_charter)
+                    if charter.atom_id in charters:
+                        print(
+                            f"Duplicate charter {collection.owner_email}; {collection.atom_id}; {charter.atom_id}. Skipping"
                         )
                         continue
-                    charter.set_source_charter(source_charter)
-                    charters.append(charter)
+                    charters[charter.atom_id] = charter
                 except Exception as e:
                     print(f"Failed to create mycharter {cei_path}: {e}")
                     continue
-        return charters
+        return list(charters.values())
 
     def list_private_mycollections(self, users: List[XmlUser]) -> List[XmlMycollection]:
         my_collections: Dict[str, XmlMycollection] = {}

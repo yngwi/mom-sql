@@ -39,6 +39,6 @@ class XmlCollectionCharter(XmlCharter):
         # collection_file
         self.collection_file = collection.file
 
-    def set_source_charter(self, source_charter: XmlMycharter):
+    def set_source_mycharter(self, source_charter: XmlMycharter):
         self.source_mycharter_id = source_charter.id
         self.source_mycharter_atom_id = source_charter.atom_id
