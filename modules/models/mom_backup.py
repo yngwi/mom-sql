@@ -101,7 +101,7 @@ class MomBackup:
             file_lower = file.lower()
             if file_lower in users:
                 print(
-                    f"Different case for {file}. Potential conflict with {users[file_lower].file}. Skipping."
+                    f"Different case for {file}. Potential conflict with {users[file_lower].file}. Skipping"
                 )
                 continue
             xrx = self._get_xml(f"db/mom-data/xrx.user/{file}")
@@ -166,7 +166,7 @@ class MomBackup:
                 try:
                     charter = XmlFondCharter(charter_file, fond, cei, users)
                     if charter.atom_id in charters:
-                        print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                        print(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
                     else:
                         charters[charter.atom_id] = charter
@@ -211,7 +211,7 @@ class MomBackup:
                 try:
                     charter = XmlCollectionCharter(charter_file, collection, cei, users)
                     if charter.atom_id in charters:
-                        print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                        print(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
                     else:
                         charters[charter.atom_id] = charter
@@ -234,7 +234,7 @@ class MomBackup:
             try:
                 charter = XmlSavedCharter(saved_file, cei, users, fonds, collections)
                 if charter.atom_id in charters_map:
-                    print(f"Duplicate charter {charter.atom_id}. Skipping.")
+                    print(f"Duplicate charter {charter.atom_id}. Skipping")
                     continue
                 else:
                     charters_map[charter.atom_id] = charter
@@ -299,10 +299,6 @@ class MomBackup:
                 cei = self._get_xml(cei_path)
                 try:
                     charter = XmlCollectionCharter(file, collection, cei)
-                    print(
-                        "Key",
-                        collection.owner_email + collection.file + charter.atom_id,
-                    )
                     source_charter = private_charters_map.get(
                         collection.owner_email + collection.atom_id + charter.atom_id,
                         None,
@@ -317,10 +313,6 @@ class MomBackup:
                 except Exception as e:
                     print(f"Failed to create mycharter {cei_path}: {e}")
                     continue
-        for key in list(private_charters_map.keys())[:20]:
-            c = private_charters_map[key]
-            print("key in src", key)
-            print("charter", c.atom_id, c.owner_email, c.collection_file)
         return charters
 
     def list_private_mycollections(self, users: List[XmlUser]) -> List[XmlMycollection]:
@@ -335,7 +327,7 @@ class MomBackup:
                 mycollection = XmlMycollection(file, cei, user)
                 if mycollection.atom_id in my_collections:
                     print(
-                        f"Duplicate mycollection {mycollection.file}/{mycollection.atom_id}. Skipping."
+                        f"Duplicate mycollection {mycollection.file}/{mycollection.atom_id}. Skipping"
                     )
                     continue
                 my_collections[mycollection.atom_id] = mycollection
