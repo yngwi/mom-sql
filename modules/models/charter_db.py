@@ -1,7 +1,9 @@
+from datetime import date
 from typing import Dict, List, Tuple
 
 import psycopg
 from psycopg import sql
+from psycopg.types.range import Range
 
 from modules.models.xml_archive import XmlArchive
 from modules.models.xml_collection import XmlCollection
@@ -74,11 +76,15 @@ SETUP_QUERIES = """
         atom_id TEXT NOT NULL UNIQUE,
         idno_id TEXT,
         idno_text TEXT,
-        url TEXT NOT NULL,
+        issued_date DATERANGE,
+        issued_date_text TEXT,
         last_editor_id INTEGER,
+        sort_date Date NOT NULL DEFAULT CURRENT_DATE,
+        url TEXT NOT NULL,
         FOREIGN KEY (last_editor_id) REFERENCES users(id)
     );
     CREATE INDEX ON charters (last_editor_id);
+    CREATE INDEX ON charters (sort_date);
 
     CREATE TABLE IF NOT EXISTS saved_charters (
         id SERIAL PRIMARY KEY,
@@ -87,26 +93,34 @@ SETUP_QUERIES = """
         idno_id TEXT,
         idno_text TEXT,
         is_released BOOLEAN NOT NULL DEFAULT FALSE,
+        issued_date DATERANGE,
+        issued_date_text TEXT,
         original_charter_id INTEGER NOT NULL,
+        sort_date Date NOT NULL DEFAULT CURRENT_DATE,
         start_time TIMESTAMP NOT NULL,
         url TEXT NOT NULL,
         FOREIGN KEY (editor_id) REFERENCES users(id),
         FOREIGN KEY (original_charter_id) REFERENCES charters(id)
     );
     CREATE INDEX ON saved_charters (editor_id);
+    CREATE INDEX ON saved_charters (sort_date);
 
     CREATE TABLE IF NOT EXISTS private_charters (
         id SERIAL PRIMARY KEY,
         atom_id TEXT NOT NULL,
-        private_collection_id INTEGER NOT NULL,
         idno_id TEXT,
         idno_text TEXT,
+        issued_date DATERANGE,
+        issued_date_text TEXT,
+        private_collection_id INTEGER NOT NULL,
+        sort_date Date NOT NULL DEFAULT CURRENT_DATE,
         source_charter_id INTEGER,
         FOREIGN KEY (private_collection_id) REFERENCES private_collections(id),
         FOREIGN KEY (source_charter_id) REFERENCES charters(id)
     );
     CREATE INDEX ON private_charters (private_collection_id);
     CREATE INDEX ON private_charters (source_charter_id);
+    CREATE INDEX ON private_charters (sort_date);
 
     CREATE TABLE IF NOT EXISTS private_charter_user_shares (
         private_charter_id INTEGER NOT NULL,
@@ -199,6 +213,14 @@ SETUP_QUERIES = """
     CREATE INDEX ON user_charter_bookmarks (charter_id);
     CREATE INDEX ON user_charter_bookmarks (note);
 """
+
+
+def _dates_to_range(date_range: None | Tuple[date, date]) -> None | Range:
+    if date_range is None:
+        return None
+    lower, upper = date_range
+    bounds = "[]"
+    return Range(lower=lower, upper=upper, bounds=bounds)
 
 
 class CharterDb:
@@ -385,11 +407,14 @@ class CharterDb:
                     original_id,
                     charter.start_time,
                     charter.url,
+                    _dates_to_range(charter.issued_date),
+                    charter.issued_date_text,
+                    charter.sort_date,
                 ]
             )
             valid_charters.append(charter)
         with self._cur.copy(
-            "COPY saved_charters (id, atom_id, editor_id, idno_id, idno_text, is_released, original_charter_id, start_time, url) FROM STDIN"
+            "COPY saved_charters (id, atom_id, editor_id, idno_id, idno_text, is_released, original_charter_id, start_time, url, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -433,11 +458,14 @@ class CharterDb:
                 charter.idno_text,
                 charter.url,
                 charter.last_editor_id,
+                _dates_to_range(charter.issued_date),
+                charter.issued_date_text,
+                charter.sort_date,
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -491,12 +519,15 @@ class CharterDb:
                 charter.idno_text,
                 charter.url,
                 charter.last_editor_id,
+                _dates_to_range(charter.issued_date),
+                charter.issued_date_text,
+                charter.sort_date,
             ]
             for charter in charters
         ]
         # Insert charters
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -659,11 +690,14 @@ class CharterDb:
                 charter.idno_id,
                 charter.idno_text,
                 charter.source_charter_id,
+                _dates_to_range(charter.issued_date),
+                charter.issued_date_text,
+                charter.sort_date,
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY private_charters (id, atom_id, private_collection_id, idno_id, idno_text, source_charter_id) FROM STDIN"
+            "COPY private_charters (id, atom_id, private_collection_id, idno_id, idno_text, source_charter_id, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in records:
                 copy.write_row(record)
@@ -721,11 +755,14 @@ class CharterDb:
                 charter.idno_text,
                 charter.url,
                 charter.last_editor_id,
+                _dates_to_range(charter.issued_date),
+                charter.issued_date_text,
+                charter.sort_date,
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id) FROM STDIN"
+            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)

@@ -1,4 +1,7 @@
-from typing import List, Type
+import calendar
+import re
+from datetime import date
+from typing import List, Set, Tuple, Type
 
 import validators
 from lxml import etree
@@ -8,16 +11,75 @@ from modules.models.serial_id_generator import SerialIDGenerator, T
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts, normalize_string
 
+MOM_DATE_REGEX = re.compile(
+    r"^(?P<year>-?[0129]?[0-9][0-9][0-9])(?P<month>[019][0-9])(?P<day>[01239][0-9])$"
+)
+
+
+def _parse_date(value: str) -> List[date]:
+    if value == "99999999" or value == "00000000":
+        return []
+    match = re.search(MOM_DATE_REGEX, value)
+    if match is None:
+        raise ValueError("Invalid mom date value provided: '{}'".format(value))
+    year = match.group("year")
+    if not isinstance(year, str):
+        raise ValueError("Invalid year in mom date value: {}".format(year))
+    month = match.group("month")
+    if not isinstance(month, str):
+        raise ValueError("Invalid month in mom date value: {}".format(month))
+    day = match.group("day")
+    if not isinstance(day, str):
+        raise ValueError("Invalid day in mom date value: {}".format(day))
+    if month == "99" or month == "00":
+        return [
+            date(int(year), 1, 1),
+            date(
+                int(year),
+                12,
+                31,
+            ),
+        ]
+    if day == "99" or day == "00":
+        return [
+            date(int(year), int(month), 1),
+            date(
+                int(year),
+                int(month),
+                calendar.monthrange(int(year), int(month))[1],
+            ),
+        ]
+    return [date(int(year), int(month), int(day))]
+
+
+def _extract_date_attrib(element: None | etree._Element, name: str) -> List[date]:
+    if element is None:
+        return []
+    value = element.attrib.get(name, None)
+    if value is None:
+        return []
+    return _parse_date(value)
+
+
+def _extract_opt_text(element: None | etree._Element) -> None | str:
+    if element is None:
+        return None
+    return str(element.text) if element.text is not None else None
+
 
 class XmlCharter:
     atom_id: str
     file: str
-    last_editor_id: None | int = None
-    last_editor_email: None | str = None
     id: int
     idno_id: None | str = None
     idno_text: None | str = None
     images: List[str]
+    issued_date: None | Tuple[date, date] = None
+    issued_date_is_exact: bool = True
+    issued_date_text: None | str = None
+    last_editor_email: None | str = None
+    last_editor_id: None | int = None
+    sort_date: date
     url: str
 
     def __init__(
@@ -76,6 +138,56 @@ class XmlCharter:
             elif idno_text is not None and idno_id is not None:
                 self.idno_id = idno_id
                 self.idno_text = idno_text
+
+        # date and date text
+        self.sort_date = date.today()
+        date_single_element = cei.find(
+            ".//cei:text/cei:body/cei:chDesc/cei:issued/cei:date", NAMESPACES
+        )
+        date_range_element = cei.find(
+            ".//cei:text/cei:body/cei:chDesc/cei:issued/cei:dateRange", NAMESPACES
+        )
+        if date_single_element is not None or date_range_element is not None:
+            try:
+                date_set: Set[date] = set()
+                date_set = date_set.union(
+                    _extract_date_attrib(date_single_element, "value"),
+                    _extract_date_attrib(date_range_element, "from"),
+                    _extract_date_attrib(date_range_element, "to"),
+                )
+                dates: List[date] = list(date_set)
+                dates.sort()
+                if len(dates) == 0:
+                    pass
+                elif len(dates) <= 4:
+                    self.sort_date = dates[-1]
+                    self.issued_date = (dates[0], dates[-1])
+                elif len(dates) > 2:
+                    print(f"Too many dates found for charter {self.atom_id}")
+            except ValueError as e:
+                print(f"Error parsing date for charter {self.atom_id}: {e}")
+            if self.issued_date is not None:
+                self.issued_date_is_exact = self.issued_date[0] == self.issued_date[1]
+            single_text = _extract_opt_text(date_single_element)
+            range_text = _extract_opt_text(date_range_element)
+            if single_text is None and range_text is None:
+                if self.issued_date is not None:
+                    if type(self.issued_date) is tuple:
+                        self.issued_date_text = f"{self.issued_date[0].isoformat()} - {self.issued_date[1].isoformat()}"
+                    elif type(self.issued_date) is date:
+                        self.issued_date_text = self.issued_date.isoformat()
+                else:
+                    self.issued_date_text = None
+            elif single_text is not None and range_text is not None:
+                if single_text == range_text:
+                    self.issued_date_text = single_text
+                else:
+                    print(f"Conflicting date texts found for charter {self.atom_id}")
+                    self.issued_date_text = single_text
+            else:
+                self.issued_date_text = (
+                    single_text if single_text is not None else range_text
+                )
 
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))
         if email != "" and email != "guest" and email != "admin":
