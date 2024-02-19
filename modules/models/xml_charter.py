@@ -15,6 +15,9 @@ MOM_DATE_REGEX = re.compile(
     r"^(?P<year>-?[0129]?[0-9][0-9][0-9])(?P<month>[019][0-9])(?P<day>[01239][0-9])$"
 )
 
+MIN_YEAR = 500
+MAX_YEAR = year = date.today().year
+
 
 def _parse_date(value: str) -> List[date]:
     if value == "99999999" or value == "00000000":
@@ -25,6 +28,8 @@ def _parse_date(value: str) -> List[date]:
     year = match.group("year")
     if not isinstance(year, str):
         raise ValueError("Invalid year in mom date value: {}".format(year))
+    if int(year) < MIN_YEAR or int(year) > MAX_YEAR:
+        return []
     month = match.group("month")
     if not isinstance(month, str):
         raise ValueError("Invalid month in mom date value: {}".format(month))
@@ -188,6 +193,8 @@ class XmlCharter:
                 self.issued_date_text = (
                     single_text if single_text is not None else range_text
                 )
+            if self.issued_date_text == "9999":
+                self.issued_date_text = None
 
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))
         if email != "" and email != "guest" and email != "admin":
