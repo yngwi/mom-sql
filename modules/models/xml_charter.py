@@ -15,7 +15,7 @@ MOM_DATE_REGEX = re.compile(
     r"^(?P<year>-?[0129]?[0-9][0-9][0-9])(?P<month>[019][0-9])(?P<day>[01239][0-9])$"
 )
 
-MIN_YEAR = 500
+MIN_YEAR = 100
 MAX_YEAR = year = date.today().year
 
 
