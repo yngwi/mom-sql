@@ -1,7 +1,9 @@
+import io
 from datetime import date
 from typing import Dict, List, Tuple
 
 import psycopg
+from lxml import etree
 from psycopg import sql
 from psycopg.types.range import Range
 
@@ -73,6 +75,7 @@ SETUP_QUERIES = """
 
     CREATE TABLE IF NOT EXISTS charters (
         id SERIAL PRIMARY KEY,
+        abstract XML,
         atom_id TEXT NOT NULL UNIQUE,
         idno_id TEXT,
         idno_text TEXT,
@@ -80,6 +83,7 @@ SETUP_QUERIES = """
         issued_date_text TEXT,
         last_editor_id INTEGER,
         sort_date Date NOT NULL DEFAULT CURRENT_DATE,
+        tenor XML,
         url TEXT NOT NULL,
         FOREIGN KEY (last_editor_id) REFERENCES users(id)
     );
@@ -88,6 +92,7 @@ SETUP_QUERIES = """
 
     CREATE TABLE IF NOT EXISTS saved_charters (
         id SERIAL PRIMARY KEY,
+        abstract XML,
         atom_id TEXT NOT NULL UNIQUE,
         editor_id INTEGER NOT NULL,
         idno_id TEXT,
@@ -98,6 +103,7 @@ SETUP_QUERIES = """
         original_charter_id INTEGER NOT NULL,
         sort_date Date NOT NULL DEFAULT CURRENT_DATE,
         start_time TIMESTAMP NOT NULL,
+        tenor XML,
         url TEXT NOT NULL,
         FOREIGN KEY (editor_id) REFERENCES users(id),
         FOREIGN KEY (original_charter_id) REFERENCES charters(id)
@@ -107,6 +113,7 @@ SETUP_QUERIES = """
 
     CREATE TABLE IF NOT EXISTS private_charters (
         id SERIAL PRIMARY KEY,
+        abstract XML,
         atom_id TEXT NOT NULL,
         idno_id TEXT,
         idno_text TEXT,
@@ -115,6 +122,7 @@ SETUP_QUERIES = """
         private_collection_id INTEGER NOT NULL,
         sort_date Date NOT NULL DEFAULT CURRENT_DATE,
         source_charter_id INTEGER,
+        tenor XML,
         FOREIGN KEY (private_collection_id) REFERENCES private_collections(id),
         FOREIGN KEY (source_charter_id) REFERENCES charters(id)
     );
@@ -212,6 +220,81 @@ SETUP_QUERIES = """
     CREATE INDEX ON user_charter_bookmarks (user_id);
     CREATE INDEX ON user_charter_bookmarks (charter_id);
     CREATE INDEX ON user_charter_bookmarks (note);
+
+    -- Function to check if the XML data contains content within a specific root element.
+    CREATE OR REPLACE FUNCTION public.has_xml_content(xml_data xml, root_element_name text)
+        RETURNS boolean
+        LANGUAGE plpgsql
+        IMMUTABLE
+    AS $function$
+    DECLARE
+        namespace_array text[] := ARRAY[
+            ARRAY['cei','http://www.monasterium.net/NS/cei'],
+            ARRAY['atom','http://www.w3.org/2005/Atom'],
+            ARRAY['ead','urn:isbn:1-931666-22-9'],
+            ARRAY['eag','http://www.archivgut-online.de/eag'],
+            ARRAY['exist','http://exist.sourceforge.net/NS/exist'],
+            ARRAY['oei','http://www.monasterium.net/NS/oei'],
+            ARRAY['xrx','http://www.monasterium.net/NS/xrx']
+        ];
+        element_count INTEGER;
+    BEGIN
+        SELECT count(*)
+        INTO element_count
+        FROM unnest(xpath('/' || root_element_name || '/*', xml_data, namespace_array)) AS e(element_nodes);
+        RETURN element_count > 0;
+    END;
+    $function$;
+
+    -- Function to extract text from an XML element using an XPath expression.
+    CREATE OR REPLACE FUNCTION public.xpath_to_text(xml_input xml, xpath_expr text)
+        RETURNS text
+        LANGUAGE plpgsql
+        IMMUTABLE
+    AS $function$
+    DECLARE
+        namespace_array text[] := ARRAY[
+            ARRAY['cei', 'http://www.monasterium.net/NS/cei'],
+            ARRAY['atom', 'http://www.w3.org/2005/Atom'],
+            ARRAY['ead', 'urn:isbn:1-931666-22-9'],
+            ARRAY['eag', 'http://www.archivgut-online.de/eag'],
+            ARRAY['exist', 'http://exist.sourceforge.net/NS/exist'],
+            ARRAY['oei', 'http://www.monasterium.net/NS/oei'],
+            ARRAY['xrx', 'http://www.monasterium.net/NS/xrx']
+        ];
+        text_nodes text[];
+        result text := '';
+    BEGIN
+        text_nodes := ARRAY(SELECT unnest(xpath(xpath_expr, xml_input, namespace_array)));
+        IF text_nodes IS NULL OR array_length(text_nodes, 1) = 0 THEN
+            RETURN NULL; -- Returns NULL if no text nodes are found
+        ELSE
+            SELECT string_agg(trim(node), ' ') INTO result FROM unnest(text_nodes) AS node;
+            RETURN result; -- Returns concatenated and normalized text nodes
+        END IF;
+    END
+    $function$;
+
+    -- Modify charters table to add a column for the the abstract fulltext
+    ALTER TABLE charters
+    ADD COLUMN abstract_fulltext text GENERATED ALWAYS AS (
+        public.xpath_to_text(abstract::xml, './/text()')
+    ) STORED;
+    CREATE INDEX charters_abstract_fulltext_gin_idx ON charters USING gin (to_tsvector('simple', abstract_fulltext));
+
+    -- Modify charters table to add a column for the issuer text
+    ALTER TABLE charters
+    ADD COLUMN issuer_text text GENERATED ALWAYS AS (
+        public.xpath_to_text(abstract::xml, './/cei:issuer//text()')
+    ) STORED;
+    CREATE INDEX charters_issuer_text_idx ON charters USING btree (issuer_text);
+
+    -- Modify charters table to add a column for the tenor fulltext
+    ALTER TABLE charters
+    ADD COLUMN tenor_fulltext text GENERATED ALWAYS AS (
+        public.xpath_to_text(tenor::xml, './/text()')
+    ) STORED;
+    CREATE INDEX charters_tenor_fulltext_gin_idx ON charters USING gin (to_tsvector('simple', tenor_fulltext));
 """
 
 
@@ -221,6 +304,24 @@ def _dates_to_range(date_range: None | Tuple[date, date]) -> None | Range:
     lower, upper = date_range
     bounds = "[]"
     return Range(lower=lower, upper=upper, bounds=bounds)
+
+
+def _serialize_xml(element: None | etree._Element) -> None | str:
+    if element is None:
+        return None
+    string = etree.tostring(element, encoding="unicode", pretty_print=True).strip()
+    if string[0] != "<" or string[-1] != ">":
+        print(f"Invalid XML string: {string}")
+        try:
+            parser = etree.XMLParser(recover=True)
+            root = etree.parse(io.StringIO(string), parser).getroot()
+            cleaned_xml = etree.tostring(
+                root, encoding="unicode", pretty_print=True
+            ).strip()
+            return None if cleaned_xml == "" else cleaned_xml
+        except etree.XMLSyntaxError as e:
+            raise Exception(f"Error parsing XML: {e}")
+    return string
 
 
 class CharterDb:
@@ -399,6 +500,7 @@ class CharterDb:
             charter_records.append(
                 [
                     charter.id,
+                    _serialize_xml(charter.abstract),
                     charter.atom_id,
                     charter.editor_id,
                     charter.idno_id,
@@ -406,6 +508,7 @@ class CharterDb:
                     charter.released,
                     original_id,
                     charter.start_time,
+                    _serialize_xml(charter.tenor),
                     charter.url,
                     _dates_to_range(charter.issued_date),
                     charter.issued_date_text,
@@ -414,7 +517,7 @@ class CharterDb:
             )
             valid_charters.append(charter)
         with self._cur.copy(
-            "COPY saved_charters (id, atom_id, editor_id, idno_id, idno_text, is_released, original_charter_id, start_time, url, issued_date, issued_date_text, sort_date) FROM STDIN"
+            "COPY saved_charters (id, abstract, atom_id, editor_id, idno_id, idno_text, is_released, original_charter_id, start_time, tenor, url, issued_date, issued_date_text, sort_date) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -453,6 +556,7 @@ class CharterDb:
         charter_records = [
             [
                 charter.id,
+                _serialize_xml(charter.abstract),
                 charter.atom_id,
                 charter.idno_id,
                 charter.idno_text,
@@ -461,11 +565,12 @@ class CharterDb:
                 _dates_to_range(charter.issued_date),
                 charter.issued_date_text,
                 charter.sort_date,
+                _serialize_xml(charter.tenor),
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
+            "COPY charters (id, abstract, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date, tenor) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -514,6 +619,7 @@ class CharterDb:
         charter_records = [
             [
                 charter.id,
+                _serialize_xml(charter.abstract),
                 charter.atom_id,
                 charter.idno_id,
                 charter.idno_text,
@@ -522,12 +628,13 @@ class CharterDb:
                 _dates_to_range(charter.issued_date),
                 charter.issued_date_text,
                 charter.sort_date,
+                _serialize_xml(charter.tenor),
             ]
             for charter in charters
         ]
         # Insert charters
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
+            "COPY charters (id, abstract, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date, tenor) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)
@@ -685,6 +792,7 @@ class CharterDb:
         records = [
             [
                 charter.id,
+                _serialize_xml(charter.abstract),
                 charter.atom_id,
                 charter.collection_id,
                 charter.idno_id,
@@ -693,11 +801,12 @@ class CharterDb:
                 _dates_to_range(charter.issued_date),
                 charter.issued_date_text,
                 charter.sort_date,
+                _serialize_xml(charter.tenor),
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY private_charters (id, atom_id, private_collection_id, idno_id, idno_text, source_charter_id, issued_date, issued_date_text, sort_date) FROM STDIN"
+            "COPY private_charters (id, abstract, atom_id, private_collection_id, idno_id, idno_text, source_charter_id, issued_date, issued_date_text, sort_date, tenor) FROM STDIN"
         ) as copy:
             for record in records:
                 copy.write_row(record)
@@ -750,6 +859,7 @@ class CharterDb:
         charter_records = [
             [
                 charter.id,
+                _serialize_xml(charter.abstract),
                 charter.atom_id,
                 charter.idno_id,
                 charter.idno_text,
@@ -758,11 +868,12 @@ class CharterDb:
                 _dates_to_range(charter.issued_date),
                 charter.issued_date_text,
                 charter.sort_date,
+                _serialize_xml(charter.tenor),
             ]
             for charter in charters
         ]
         with self._cur.copy(
-            "COPY charters (id, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date) FROM STDIN"
+            "COPY charters (id, abstract, atom_id, idno_id, idno_text, url, last_editor_id, issued_date, issued_date_text, sort_date, tenor) FROM STDIN"
         ) as copy:
             for record in charter_records:
                 copy.write_row(record)

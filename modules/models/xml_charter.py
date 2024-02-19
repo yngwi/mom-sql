@@ -73,6 +73,7 @@ def _extract_opt_text(element: None | etree._Element) -> None | str:
 
 
 class XmlCharter:
+    abstract: None | etree._Element = None
     atom_id: str
     file: str
     id: int
@@ -85,6 +86,7 @@ class XmlCharter:
     last_editor_email: None | str = None
     last_editor_id: None | int = None
     sort_date: date
+    tenor: None | etree._Element = None
     url: str
 
     def __init__(
@@ -205,3 +207,15 @@ class XmlCharter:
             )
             # last_editor_email
             self.last_editor_email = email
+
+        # abstract
+        self.abstract = cei.find(
+            "./atom:content/cei:text/cei:body/cei:chDesc/cei:abstract",
+            NAMESPACES,
+        )
+
+        # tenor
+        self.tenor = cei.find(
+            "./atom:content/cei:text/cei:body/cei:tenor",
+            NAMESPACES,
+        )
