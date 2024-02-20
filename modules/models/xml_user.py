@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Dict, List
 
 from lxml import etree
@@ -9,25 +8,17 @@ from modules.utils import normalize_string, parse_date
 
 
 class Bookmark:
-    atom_id: str
-    note: None | str = None
-
     def __init__(self, atom_id: str, note: None | str = None):
         self.atom_id = atom_id
         self.note = note
 
 
 class SavedCharter:
-    atom_id: str
-    start_date: datetime
-    released: bool = False
-
     def __init__(self, saved: etree._Element):
         # atom_id
-        atom_id = saved.findtext("./xrx:id", "", NAMESPACES)
-        if atom_id == "":
+        self.atom_id = saved.findtext("./xrx:id", "", NAMESPACES)
+        if self.atom_id == "":
             raise Exception("Cannot find atom_id for saved charter")
-        self.atom_id = atom_id
 
         # start_date
         start_time = saved.findtext("./xrx:start_time", "", NAMESPACES)
@@ -41,15 +32,6 @@ class SavedCharter:
 
 
 class XmlUser:
-    bookmarks: List[Bookmark]
-    email: str
-    file: str
-    first_name: None | str = None
-    id: int
-    moderater_email: None | str = None
-    name: None | str = None
-    saved_charters: List[SavedCharter]
-
     def __init__(
         self,
         file: str,
@@ -63,21 +45,23 @@ class XmlUser:
         self.file = file
 
         # email
-        email = normalize_string(xrx.findtext("./xrx:email", "", NAMESPACES))
-        assert email != ""
-        self.email = normalize_string(email)
+        self.email = normalize_string(xrx.findtext("./xrx:email", "", NAMESPACES))
+        assert self.email != ""
 
         # first_name
+        self.first_name = None
         first_name = normalize_string(xrx.findtext("./xrx:firstname", "", NAMESPACES))
         if first_name != "":
             self.first_name = first_name
 
         # name
+        self.name = None
         name = normalize_string(xrx.findtext("./xrx:name", "", NAMESPACES))
         if name != "":
             self.name = name
 
         # moderater_email
+        self.moderater_email = None
         moderater_mom_id = normalize_string(
             xrx.findtext("./xrx:moderator", "", NAMESPACES)
         )

@@ -1,7 +1,7 @@
 import calendar
 import re
 from datetime import date
-from typing import List, Set, Tuple, Type
+from typing import List, Set, Type
 
 import validators
 from lxml import etree
@@ -73,22 +73,6 @@ def _extract_opt_text(element: None | etree._Element) -> None | str:
 
 
 class XmlCharter:
-    abstract: None | etree._Element = None
-    atom_id: str
-    file: str
-    id: int
-    idno_id: None | str = None
-    idno_text: None | str = None
-    images: List[str]
-    issued_date: None | Tuple[date, date] = None
-    issued_date_is_exact: bool = True
-    issued_date_text: None | str = None
-    last_editor_email: None | str = None
-    last_editor_id: None | int = None
-    sort_date: date
-    tenor: None | etree._Element = None
-    url: str
-
     def __init__(
         self,
         file: str,
@@ -110,7 +94,7 @@ class XmlCharter:
         self.url = url
 
         # images
-        images = []
+        self.images = []
         for graphic in cei.findall(".//cei:graphic", NAMESPACES):
             url = graphic.attrib.get("url")
             if url:
@@ -122,32 +106,35 @@ class XmlCharter:
                     else None
                 )
                 if full_url and validators.url(full_url):
-                    images.append(full_url)
-        self.images = images
+                    self.images.append(full_url)
 
         # atom_id
-        atom_id = cei.findtext("./atom:id", "", NAMESPACES)
-        if atom_id == "":
+        self.atom_id = cei.findtext("./atom:id", "", NAMESPACES)
+        if self.atom_id == "":
             raise Exception(f"No atom_id found for charter {file}")
-        self.atom_id = atom_id
 
         # idno
-        idno = cei.find(".//cei:idno", NAMESPACES)
-        if idno is not None:
-            idno_id = idno.attrib.get("id")
-            idno_text = idno.text
+        self.idno_id = None
+        self.idno_text = None
+        idno_ele = cei.find(".//cei:idno", NAMESPACES)
+        if idno_ele is not None:
+            idno_id = idno_ele.attrib.get("id", None)
+            idno_text = idno_ele.text
             if idno_text is None and idno_id is not None:
-                self.idno_id = idno_id
-                self.idno_text = idno_id
+                self.idno_id = str(idno_id)
+                self.idno_text = str(idno_id)
             elif idno_text is not None and idno_id is None:
-                self.idno_id = idno_text
-                self.idno_text = idno_text
+                self.idno_id = str(idno_text)
+                self.idno_text = str(idno_text)
             elif idno_text is not None and idno_id is not None:
-                self.idno_id = idno_id
-                self.idno_text = idno_text
+                self.idno_id = str(idno_id)
+                self.idno_text = str(idno_text)
 
         # date and date text
         self.sort_date = date.today()
+        self.issued_date = None
+        self.issued_date_text = None
+        self.issued_date_is_exact = True
         date_single_element = cei.find(
             ".//cei:text/cei:body/cei:chDesc/cei:issued/cei:date", NAMESPACES
         )
@@ -198,6 +185,8 @@ class XmlCharter:
             if self.issued_date_text == "9999":
                 self.issued_date_text = None
 
+        self.last_editor_id = None
+        self.last_editor_email = None
         email = normalize_string(cei.findtext(".//atom:email", "", NAMESPACES))
         if email != "" and email != "guest" and email != "admin":
             # last_editor
@@ -209,13 +198,13 @@ class XmlCharter:
             self.last_editor_email = email
 
         # abstract
-        self.abstract = cei.find(
+        self.abstract: None | etree._Element = cei.find(
             "./atom:content/cei:text/cei:body/cei:chDesc/cei:abstract",
             NAMESPACES,
         )
 
         # tenor
-        self.tenor = cei.find(
+        self.tenor: None | etree._Element = cei.find(
             "./atom:content/cei:text/cei:body/cei:tenor",
             NAMESPACES,
         )

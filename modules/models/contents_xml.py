@@ -17,10 +17,6 @@ class ContentEntryType(Enum):
 
 
 class ContentEntry:
-    name: str
-    file: str
-    type: ContentEntryType
-
     def __init__(self, element: etree._Element, collection: bool = False):
         name = element.get("name")
         assert name is not None
@@ -47,17 +43,13 @@ class ContentEntryResource(ContentEntry):
 
 
 class ContentsXml:
-    xml: etree._ElementTree
-    collections: List[ContentEntryCollection] = []
-    resources: List[ContentEntryResource] = []
-
     def __init__(self, xml: etree._ElementTree):
-        self.xml = xml
-        self.collections = [
+        self.xml: etree._ElementTree = xml
+        self.collections: List[ContentEntryCollection] = [
             ContentEntryCollection(collection)
             for collection in xml.findall("/exist:subcollection", NAMESPACES)
         ]
-        self.resources = [
+        self.resources: List[ContentEntryResource] = [
             ContentEntryResource(resource)
             for resource in xml.findall(
                 "/exist:resource[@type='XMLResource']", NAMESPACES

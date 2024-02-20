@@ -10,11 +10,6 @@ from modules.utils import join_url_parts
 
 
 class XmlCollectionCharter(XmlCharter):
-    collection_file: str
-    collection_id: int
-    source_mycharter_id: None | int = None
-    source_mycharter_atom_id: None | str = None
-
     def __init__(
         self,
         file: str,
@@ -38,6 +33,12 @@ class XmlCollectionCharter(XmlCharter):
 
         # collection_file
         self.collection_file = collection.file
+
+        # source_mycharter_id
+        self.source_mycharter_id = None
+
+        # source_mycharter_atom_id
+        self.source_mycharter_atom_id = None
 
     def set_source_mycharter(self, source_charter: XmlMycharter):
         self.source_mycharter_id = source_charter.id

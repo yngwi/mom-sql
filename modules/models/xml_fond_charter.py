@@ -9,11 +9,6 @@ from modules.utils import join_url_parts
 
 
 class XmlFondCharter(XmlCharter):
-    archive_file: str
-    archive_id: int
-    fond_file: str
-    fond_id: int
-
     def __init__(
         self,
         file: str,

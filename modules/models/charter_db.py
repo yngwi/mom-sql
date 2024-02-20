@@ -311,7 +311,6 @@ def _serialize_xml(element: None | etree._Element) -> None | str:
         return None
     string = etree.tostring(element, encoding="unicode", pretty_print=True).strip()
     if string[0] != "<" or string[-1] != ">":
-        print(f"Invalid XML string: {string}")
         try:
             parser = etree.XMLParser(recover=True)
             root = etree.parse(io.StringIO(string), parser).getroot()
@@ -320,26 +319,19 @@ def _serialize_xml(element: None | etree._Element) -> None | str:
             ).strip()
             return None if cleaned_xml == "" else cleaned_xml
         except etree.XMLSyntaxError as e:
-            raise Exception(f"Error parsing XML: {e}")
+            raise Exception(f"Error parsing invalid XML: {e}")
     return string
 
 
 class CharterDb:
-    _db: str
-    _host: str
-    _password: str
-    _port: int
-    _user: str
-
-    _con: psycopg.connection.Connection | None = None
-    _cur: psycopg.cursor.Cursor | None = None
-
     def __init__(self, host, password, port=5432, user="postgres", db="momcheck"):
         self._db = db
         self._host = host
         self._password = password
         self._port = port
         self._user = user
+        self._con: psycopg.connection.Connection | None = None
+        self._cur: psycopg.cursor.Cursor | None = None
 
     def __enter__(self):
         self._connect()

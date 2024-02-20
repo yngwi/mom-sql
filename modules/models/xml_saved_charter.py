@@ -11,10 +11,6 @@ from modules.utils import join_url_parts
 
 
 class XmlSavedCharter(XmlCharter):
-    editor_id: int = -1
-    start_time: datetime = datetime.now()
-    released: bool = False
-
     def __init__(
         self,
         file: str,
@@ -72,3 +68,12 @@ class XmlSavedCharter(XmlCharter):
 
         # init base charter
         super().__init__(file, cei, image_base, url, users, XmlSavedCharter)
+
+        # editor_id
+        self.editor_id = -1
+
+        # start_time
+        self.start_time = datetime.now()
+
+        # released
+        self.released = False

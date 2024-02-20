@@ -8,19 +8,16 @@ from modules.utils import normalize_string
 
 
 class Oai:
-    fonds: List[str]
-    harvesters: List[str]
-
     def __init__(self, record: etree._ElementTree):
         # fonds
-        self.fonds = [
+        self.fonds: List[str] = [
             fond.text
             for fond in record.findall(".//oei:fond", NAMESPACES)
             if fond.text is not None
         ]
 
         # harvesters
-        self.harvesters = [
+        self.harvesters: List[str] = [
             harvester.text
             for harvester in record.findall(".//oei:harvester", NAMESPACES)
             if harvester.text is not None
@@ -28,14 +25,6 @@ class Oai:
 
 
 class XmlArchive:
-    atom_id: str
-    countrycode: str
-    file: str
-    id: int
-    name: str
-    oai: None | Oai = None
-    repository_id: str
-
     def __init__(
         self,
         file: str,
@@ -49,25 +38,23 @@ class XmlArchive:
         self.file = file
 
         # atom_id
-        atom_id = eag.findtext("./atom:id", "", NAMESPACES)
-        assert atom_id != ""
-        self.atom_id = atom_id
+        self.atom_id = eag.findtext("./atom:id", "", NAMESPACES)
+        assert self.atom_id != ""
 
         # repository_id
         id = eag.find(".//eag:repositorid", NAMESPACES)
         assert id is not None
         assert id.text is not None
-        self.repository_id = id.text
+        self.repository_id = str(id.text)
 
         # countrycode
-        countrycode = id.attrib.get("countrycode")
-        assert countrycode is not None
+        countrycode = str(id.attrib.get("countrycode", ""))
+        assert countrycode != ""
         self.countrycode = countrycode
 
         # name
-        name = eag.findtext(".//eag:autform", "", NAMESPACES)
-        assert name != ""
-        self.name = normalize_string(name)
+        self.name = normalize_string(eag.findtext(".//eag:autform", "", NAMESPACES))
+        assert self.name != ""
 
         # oai
         self.oai = None if oai is None else Oai(oai)

@@ -9,15 +9,6 @@ from modules.models.xml_user import XmlUser
 
 
 class XmlMycharter(XmlCharter):
-    source_charter_id: None | int = None
-    source_atom_id: None | str = None
-    owner_id: int
-    owner_email: str
-    collection_id: None | int = None
-    collection_atom_id: None | str = None
-    collection_file: str
-    shared_with_user_ids: List[int] = []
-
     def __init__(
         self,
         file: str,
@@ -45,12 +36,19 @@ class XmlMycharter(XmlCharter):
         # collection_file
         self.collection_file = collection.file
 
-        # atom_link
+        # source_atom_id
+        self.source_atom_id = None
         atom_link = cei.find(".//atom:link", NAMESPACES)
         if atom_link is not None:
             atom_id: None | str = atom_link.attrib.get("ref", None)
             if atom_id is not None:
                 self.source_atom_id = str(atom_id)
+
+        # source_charter_id
+        self.source_charter_id = None
+
+        # shared_with_user_ids
+        self.shared_with_user_ids: List[int] = []
 
     def set_source_charter(self, source_charter: XmlCharter):
         self.source_charter_id = source_charter.id

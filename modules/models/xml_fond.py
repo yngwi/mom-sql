@@ -8,17 +8,6 @@ from modules.utils import normalize_string
 
 
 class XmlFond:
-    archive_file: str
-    archive_id: int
-    atom_id: str
-    file: str
-    free_image_access: bool = False
-    id: int
-    identifier: str
-    image_base: None | str = None
-    oai_shared: bool = False
-    title: str
-
     def __init__(
         self,
         file: str,
@@ -33,9 +22,8 @@ class XmlFond:
         self.file = file
 
         # atom_id
-        atom_id = ead.findtext("./atom:id", "", NAMESPACES)
-        assert atom_id != ""
-        self.atom_id = atom_id
+        self.atom_id = ead.findtext("./atom:id", "", NAMESPACES)
+        assert self.atom_id != ""
 
         # archive_id
         self.archive_id = archive.id
@@ -47,11 +35,10 @@ class XmlFond:
         unitid = ead.find(".//ead:unitid", NAMESPACES)
         assert unitid is not None
         if unitid.text is None:
-            identifier = unitid.attrib.get("identifier")
+            self.identifier = str(unitid.attrib.get("identifier", ""))
         else:
-            identifier = unitid.text
-        assert identifier is not None
-        self.identifier = identifier
+            self.identifier = str(unitid.text)
+        assert self.identifier != ""
 
         # title
         unititle = ead.find(".//ead:unittitle", NAMESPACES)
@@ -62,11 +49,14 @@ class XmlFond:
             title = unititle.text
         self.title = normalize_string(title)
 
+        self.oai_shared = False
         if archive.oai is not None:
             for fond in archive.oai.fonds:
                 if fond == self.identifier:
                     self.oai_shared = True
 
+        self.free_image_access = False
+        self.image_base = None
         if prefs is not None:
             # free_image_access
             free_image_access = prefs.findtext(

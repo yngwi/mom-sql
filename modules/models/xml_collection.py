@@ -11,16 +11,6 @@ from modules.utils import normalize_string
 
 
 class XmlCollection:
-    atom_id: str
-    author_email: None | str = None
-    file: str
-    id: int
-    identifier: str
-    linked_fonds: list[int]
-    image_base: None | str = None
-    oai_shared: bool = False
-    title: str
-
     def __init__(
         self,
         file: str,
@@ -37,9 +27,8 @@ class XmlCollection:
         self.file = file
 
         # atom_id
-        atom_id = cei.findtext("./atom:id", "", NAMESPACES)
-        assert atom_id != ""
-        self.atom_id = atom_id
+        self.atom_id = cei.findtext("./atom:id", "", NAMESPACES)
+        assert self.atom_id != ""
 
         # author_email
         self.author_email = cei.findtext(".//atom:email", None, NAMESPACES)
@@ -57,9 +46,9 @@ class XmlCollection:
             self.title = normalize_string(provenance_xpath[0])
         else:
             # If there is no provenance, try to get the title
-            title = cei.findtext(".//cei:title", "", NAMESPACES)
+            title = normalize_string(cei.findtext(".//cei:title", "", NAMESPACES))
             if title != "":
-                self.title = normalize_string(title)
+                self.title = title
             # If there is no title, use the identifier
             else:
                 self.title = self.identifier
@@ -68,6 +57,7 @@ class XmlCollection:
         self.oai_shared = False
 
         # image_base
+        self.image_base = None
         address = cei.findtext(".//cei:image_server_address", "", NAMESPACES)
         folder = cei.findtext(".//cei:image_server_folder", "", NAMESPACES)
         if address != "":
@@ -78,13 +68,11 @@ class XmlCollection:
                 self.image_base = url
 
         # linked_fonds
-        linked_fonds = []
+        self.linked_fonds = []
         for cei_text in cei.findall(".//cei:group/cei:text", NAMESPACES):
             if cei_text is not None:
                 atom_id = cei_text.attrib.get("id")
                 if atom_id is not None:
                     fond = next((f for f in fonds if f.atom_id == atom_id), None)
                     if fond is not None:
-                        linked_fonds.append(fond.id)
-
-        self.linked_fonds = linked_fonds
+                        self.linked_fonds.append(fond.id)

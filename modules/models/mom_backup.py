@@ -10,17 +10,16 @@ from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_fond_charter import XmlFondCharter
+from modules.models.xml_index_person import XmlIndexPerson
 from modules.models.xml_mycharter import XmlMycharter
 from modules.models.xml_mycollection import XmlMycollection
+from modules.models.xml_person_index import XmlPersonIndex
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts
 
 
 class MomBackup:
-    path: str = ""
-    zip: zipfile.ZipFile | None = None
-
     def __init__(self, path):
         self.path = path
 
@@ -41,7 +40,8 @@ class MomBackup:
         if not self.zip:
             raise Exception("Zip file not open")
         with self.zip.open(path) as contents:
-            return etree.parse(contents)
+            parser = etree.XMLParser(recover=True)
+            return etree.parse(contents, parser)
 
     def _get_xml_optional(self, path: str) -> None | etree._ElementTree:
         """
@@ -389,3 +389,12 @@ class MomBackup:
             mycollection.private_mycollection_id = private_mycollection.id
             mycollections.append(mycollection)
         return mycollections
+
+    def list_index_persons(self) -> List[XmlIndexPerson]:
+        persons: List[XmlIndexPerson] = []
+        contents_path = "db/mom-data/metadata.person.public"
+        for index_file in self._list_resources(contents_path):
+            index = XmlPersonIndex(index_file)
+            print(index.identifier, len(index.persons))
+            persons.extend(index.persons)
+        return persons
