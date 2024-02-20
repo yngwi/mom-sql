@@ -182,7 +182,7 @@ class XmlCharter:
                 self.issued_date_text = (
                     single_text if single_text is not None else range_text
                 )
-            if self.issued_date_text == "9999":
+            if self.issued_date_text == "9999" or self.issued_date_text == "ohne Datum":
                 self.issued_date_text = None
 
         self.last_editor_id = None
@@ -198,10 +198,16 @@ class XmlCharter:
             self.last_editor_email = email
 
         # abstract
-        self.abstract: None | etree._Element = cei.find(
+        self.abstract: None | etree._Element = None
+        abstract_ele = cei.find(
             "./atom:content/cei:text/cei:body/cei:chDesc/cei:abstract",
             NAMESPACES,
         )
+        if (
+            abstract_ele is not None
+            and abstract_ele.text != "Noch kein Regest vorhanden."
+        ):
+            self.abstract = abstract_ele
 
         # tenor
         self.tenor: None | etree._Element = cei.find(
