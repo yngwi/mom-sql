@@ -3,6 +3,7 @@ from typing import List
 
 from lxml import etree
 
+from modules.models.person_index import PersonIndex
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_fond import XmlFond
@@ -18,6 +19,7 @@ class XmlSavedCharter(XmlCharter):
         users: List[XmlUser],
         fonds: List[XmlFond],
         collections: List[XmlCollection],
+        person_index: PersonIndex,
     ):
         parts = file.rsplit(".xml")[0].split("#")
         if len(parts) < 4 or len(parts) > 5:
@@ -67,7 +69,9 @@ class XmlSavedCharter(XmlCharter):
             image_base = fond.image_base
 
         # init base charter
-        super().__init__(file, cei, image_base, url, users, XmlSavedCharter)
+        super().__init__(
+            file, cei, image_base, url, person_index, users, XmlSavedCharter
+        )
 
         # editor_id
         self.editor_id = -1

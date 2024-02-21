@@ -1,6 +1,6 @@
 import io
 from datetime import date
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Set, Tuple
 
 import psycopg
 from lxml import etree
@@ -10,7 +10,6 @@ from psycopg.types.range import Range
 from modules.constants import IndexLocation
 from modules.models.person_index import PersonIndex
 from modules.models.xml_archive import XmlArchive
-from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
@@ -225,6 +224,25 @@ SETUP_QUERIES = """
     CREATE INDEX ON charters_person_names (reg);
     CREATE INDEX ON charters_person_names (key);
 
+    CREATE TABLE IF NOT EXISTS saved_charters_person_names (
+        id SERIAL PRIMARY KEY,
+        saved_charter_id INTEGER NOT NULL,
+        person_id INTEGER,
+        location_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        reg TEXT,
+        key TEXT,
+        FOREIGN KEY (saved_charter_id) REFERENCES saved_charters(id),
+        FOREIGN KEY (person_id) REFERENCES persons(id),
+        FOREIGN KEY (location_id) REFERENCES index_locations(id)
+    );
+    CREATE INDEX ON saved_charters_person_names (saved_charter_id);
+    CREATE INDEX ON saved_charters_person_names (person_id);
+    CREATE INDEX ON saved_charters_person_names (location_id);
+    CREATE INDEX ON saved_charters_person_names (text);
+    CREATE INDEX ON saved_charters_person_names (reg);
+    CREATE INDEX ON saved_charters_person_names (key);
+
     CREATE TABLE IF NOT EXISTS saved_charters_images (
         saved_charter_id INTEGER NOT NULL,
         image_id INTEGER NOT NULL,
@@ -244,6 +262,25 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON private_charters_images (private_charter_id);
     CREATE INDEX ON private_charters_images (image_id);
+
+    CREATE TABLE IF NOT EXISTS private_charters_person_names (
+        id SERIAL PRIMARY KEY,
+        private_charter_id INTEGER NOT NULL,
+        person_id INTEGER,
+        location_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        reg TEXT,
+        key TEXT,
+        FOREIGN KEY (private_charter_id) REFERENCES private_charters(id),
+        FOREIGN KEY (person_id) REFERENCES persons(id),
+        FOREIGN KEY (location_id) REFERENCES index_locations(id)
+    );
+    CREATE INDEX ON private_charters_person_names (private_charter_id);
+    CREATE INDEX ON private_charters_person_names (person_id);
+    CREATE INDEX ON private_charters_person_names (location_id);
+    CREATE INDEX ON private_charters_person_names (text);
+    CREATE INDEX ON private_charters_person_names (reg);
+    CREATE INDEX ON private_charters_person_names (key);
 
     CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
         user_id INTEGER NOT NULL,
@@ -804,7 +841,7 @@ class CharterDb:
                 copy.write_row(record)
         self._con.commit()
 
-    def insert_public_collections(self, mycollections: List[XmlMycollection]):
+    def insert_public_mycollections(self, mycollections: List[XmlMycollection]):
         if not self._con or not self._cur:
             return
         records = [
@@ -825,7 +862,7 @@ class CharterDb:
                 copy.write_row(record)
         self._con.commit()
 
-    def insert_private_charters(self, charters: List[XmlMycharter]):
+    def insert_private_mycharters(self, charters: List[XmlMycharter]):
         if not self._con or not self._cur:
             return
         # Insert charters
@@ -892,7 +929,7 @@ class CharterDb:
         # Commit
         self._con.commit()
 
-    def insert_public_charters(self, charters: List[XmlCollectionCharter]):
+    def insert_public_mycharters(self, charters: List[XmlCollectionCharter]):
         if not self._con or not self._cur:
             return
         # Insert charters
@@ -957,8 +994,12 @@ class CharterDb:
         )
         self._con.commit()
 
-    def insert_person_index(
-        self, person_index: PersonIndex, public_charters: Sequence[XmlCharter]
+    def insert_index(
+        self,
+        person_index: PersonIndex,
+        public_charters: List[XmlFondCharter | XmlCollectionCharter],
+        private_charters: List[XmlMycharter],
+        saved_charters: List[XmlSavedCharter],
     ):
         if not self._con or not self._cur:
             return
@@ -979,14 +1020,14 @@ class CharterDb:
                 copy.write_row(record)
         # insert public charters person names
         public_name_records = [
-            (
+            [
                 person_name.charter_id,
                 person_name.person_id,
                 person_name.location.value,
                 person_name.text,
                 person_name.reg,
                 person_name.key,
-            )
+            ]
             for charter in public_charters
             for person_name in charter.person_names
         ]
@@ -994,5 +1035,47 @@ class CharterDb:
             "COPY charters_person_names (charter_id, person_id, location_id, text, reg, key) FROM STDIN"
         ) as copy:
             for record in public_name_records:
+                copy.write_row(record)
+        # insert private charters person names
+        private_name_records = [
+            [
+                person_name.charter_id,
+                person_name.person_id,
+                person_name.location.value,
+                person_name.text,
+                person_name.reg,
+                person_name.key,
+            ]
+            for charter in private_charters
+            for person_name in charter.person_names
+        ]
+        with self._cur.copy(
+            "COPY private_charters_person_names (private_charter_id, person_id, location_id, text, reg, key) FROM STDIN"
+        ) as copy:
+            for record in private_name_records:
+                copy.write_row(record)
+        # insert saved charters person names
+        self._cur.execute("SELECT id FROM saved_charters")
+        id_set: Set[int] = {id[0] for id in self._cur.fetchall()}
+        saved_name_records = []
+        for charter in saved_charters:
+            for person_name in charter.person_names:
+                if person_name.charter_id not in id_set:
+                    print(f"charter not found: {person_name.charter_id}")
+                    continue
+                saved_name_records.append(
+                    [
+                        person_name.charter_id,
+                        person_name.person_id,
+                        person_name.location.value,
+                        person_name.text,
+                        person_name.reg,
+                        person_name.key,
+                    ]
+                )
+        with self._cur.copy(
+            "COPY saved_charters_person_names (saved_charter_id, person_id, location_id, text, reg, key) FROM STDIN"
+        ) as copy:
+            for record in saved_name_records:
                 copy.write_row(record)
         self._con.commit()

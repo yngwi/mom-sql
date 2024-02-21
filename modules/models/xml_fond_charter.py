@@ -28,9 +28,7 @@ class XmlFondCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(
-            file, cei, fond.image_base, url, users, person_index=person_index
-        )
+        super().__init__(file, cei, fond.image_base, url, person_index, users)
 
         # archive_id
         self.archive_id = fond.archive_id

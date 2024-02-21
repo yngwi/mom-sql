@@ -3,6 +3,7 @@ from typing import Dict, List
 from lxml import etree
 
 from modules.constants import NAMESPACES
+from modules.models.person_index import PersonIndex
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_user import XmlUser
@@ -14,12 +15,13 @@ class XmlMycharter(XmlCharter):
         file: str,
         cei: etree._ElementTree,
         collection: XmlMycollection,
+        person_index: PersonIndex,
     ):
         # url
         url = f"https://www.monasterium.net/mom/{collection.file}/{collection.file}/{file.split('.cei.xml')[0]}/my-charter"
 
         # init base charter
-        super().__init__(file, cei, None, url, [], XmlMycharter)
+        super().__init__(file, cei, None, url, person_index, [], XmlMycharter)
 
         # owner_id
         self.owner_id = collection.owner_id

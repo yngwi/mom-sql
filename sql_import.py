@@ -75,13 +75,17 @@ with CharterDb(pg_host, pg_password) as db:
         print(f"** Inserting {len(collection_charters)} collection charters...")
         db.insert_collections_charters(collection_charters)
 
+        public_charters = fond_charters + collection_charters
+
         # insert user bookmarks
         print("\n** Inserting user charter bookmarks...")
         db.insert_user_charter_bookmarks(users)
 
         # insert saved charters
         print("\n** Listing saved charters...")
-        saved_charters = backup.list_saved_charters(users, fonds, collections)
+        saved_charters = backup.list_saved_charters(
+            users, fonds, collections, person_index
+        )
         print(f"** Inserting {len(saved_charters)} saved charters...")
         db.insert_saved_charters(saved_charters)
 
@@ -93,11 +97,11 @@ with CharterDb(pg_host, pg_password) as db:
 
         # insert private mycollection charters
         print("\n** Listing private collection charters...")
-        private_charters = backup.list_private_charters(
-            users, private_mycollections, fond_charters + collection_charters
+        private_mycharters = backup.list_private_charters(
+            users, private_mycollections, public_charters, person_index
         )
-        print(f"** Inserting {len(private_charters)} private collection charters...")
-        db.insert_private_charters(private_charters)
+        print(f"** Inserting {len(private_mycharters)} private collection charters...")
+        db.insert_private_mycharters(private_mycharters)
 
         # insert public mycollections
         print("\n** Listing public collections...")
@@ -105,17 +109,20 @@ with CharterDb(pg_host, pg_password) as db:
             users, private_mycollections
         )
         print(f"** Inserting {len(public_mycollections)} public mycollections...")
-        db.insert_public_collections(public_mycollections)
+        db.insert_public_mycollections(public_mycollections)
 
         # insert public mycollection charters
         print("\n** Listing public collection charters...")
-        public_charters = backup.list_public_charters(
-            private_charters, public_mycollections
+        public_mycharters = backup.list_public_charters(
+            private_mycharters, public_mycollections, person_index
         )
-        print(f"** Inserting {len(public_charters)} public collection charters...")
-        db.insert_public_charters(public_charters)
+        print(f"** Inserting {len(public_mycharters)} public collection charters...")
+        db.insert_public_mycharters(public_mycharters)
+
+        public_charters = public_charters + public_mycharters
 
         # insert indexes
-        public_charters = fond_charters + collection_charters
         print(f"\n** Inserting {person_index.count_persons()} indexes...")
-        db.insert_person_index(person_index, public_charters)
+        db.insert_index(
+            person_index, public_charters, private_mycharters, saved_charters
+        )

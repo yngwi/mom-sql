@@ -16,7 +16,7 @@ class XmlCollectionCharter(XmlCharter):
         file: str,
         collection: XmlCollection,
         cei: etree._ElementTree,
-        person_index: None | PersonIndex = None,
+        person_index: PersonIndex,
         users: List[XmlUser] = [],
     ):
         # url
@@ -28,9 +28,7 @@ class XmlCollectionCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(
-            file, cei, collection.image_base, url, users, person_index=person_index
-        )
+        super().__init__(file, cei, collection.image_base, url, person_index, users)
 
         # collection_id
         self.collection_id = collection.id

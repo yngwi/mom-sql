@@ -81,9 +81,9 @@ class XmlCharter:
         cei: etree._ElementTree,
         image_base: None | str,
         url: str,
+        person_index: PersonIndex,
         users: List[XmlUser] = [],
         override_id_gen_name: None | Type[T] = None,
-        person_index: None | PersonIndex = None,
     ):
         # id
         self.id = SerialIDGenerator().get_serial_id(
@@ -224,15 +224,14 @@ class XmlCharter:
                 name = XmlPersonName(self.id, person_name_cei, IndexLocation.BACK)
                 if name.text == "":
                     continue
-                if person_index is not None:
-                    person = person_index.find_for_name(name)
-                    if person is not None:
-                        name.set_person_id(person.id)
-                    else:
-                        if name.wikidata_iri or name.key:
-                            print(
-                                f"Person not found in index for charter {self.atom_id}: {name.text} / {name.wikidata_iri} / {name.key}"
-                            )
+                person = person_index.find_for_name(name)
+                if person is not None:
+                    name.set_person_id(person.id)
+                else:
+                    if name.wikidata_iri or name.key:
+                        print(
+                            f"Person not found in index for charter {self.atom_id}: {name.text} / {name.wikidata_iri} / {name.key}"
+                        )
                 self.person_names.append(name)
             except Exception as e:
                 print(f"Error parsing person name in charter {self.atom_id}: {e}")

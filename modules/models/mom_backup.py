@@ -232,6 +232,7 @@ class MomBackup:
         users: List[XmlUser],
         fonds: List[XmlFond],
         collections: List[XmlCollection],
+        person_index: PersonIndex,
     ) -> List[XmlSavedCharter]:
         charters_map: Dict[str, XmlSavedCharter] = {}
         contents_path = "db/mom-data/metadata.charter.saved"
@@ -240,7 +241,9 @@ class MomBackup:
             cei_path = f"db/mom-data/metadata.charter.saved/{saved_file}"
             cei = self._get_xml(cei_path)
             try:
-                charter = XmlSavedCharter(saved_file, cei, users, fonds, collections)
+                charter = XmlSavedCharter(
+                    saved_file, cei, users, fonds, collections, person_index
+                )
                 if charter.atom_id in charters_map:
                     print(f"Duplicate charter {charter.atom_id}. Skipping")
                     continue
@@ -265,6 +268,7 @@ class MomBackup:
         users: List[XmlUser],
         private_mycollections: List[XmlMycollection],
         charters: Sequence[XmlCharter],
+        person_index: PersonIndex,
     ) -> List[XmlMycharter]:
         mycharters: Dict[str, XmlMycharter] = {}
         charters_map: Dict[str, XmlCharter] = {c.atom_id: c for c in charters}
@@ -278,7 +282,7 @@ class MomBackup:
                     file = path.split("/")[-1]
                     cei = self._get_xml(path)
                     try:
-                        charter = XmlMycharter(file, cei, mycollection)
+                        charter = XmlMycharter(file, cei, mycollection, person_index)
                         if charter.source_atom_id is not None:
                             source_charter = charters_map.get(
                                 charter.source_atom_id, None
@@ -301,6 +305,7 @@ class MomBackup:
         self,
         private_charters: List[XmlMycharter],
         public_mycollections: List[XmlMycollection],
+        person_index: PersonIndex,
     ) -> List[XmlCollectionCharter]:
         charters: Dict[str, XmlCollectionCharter] = {}
         private_charters_map: Dict[str, XmlMycharter] = {
@@ -314,7 +319,7 @@ class MomBackup:
                 file = cei_path.rsplit("/")[-1]
                 cei = self._get_xml(cei_path)
                 try:
-                    charter = XmlCollectionCharter(file, collection, cei)
+                    charter = XmlCollectionCharter(file, collection, cei, person_index)
                     source_charter = private_charters_map.get(
                         collection.owner_email + collection.atom_id + charter.atom_id,
                         None,
