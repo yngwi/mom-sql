@@ -3,7 +3,6 @@ import os
 from modules.models.charter_db import CharterDb
 from modules.models.images_file import ImagesFile
 from modules.models.mom_backup import MomBackup
-from modules.utils import pick_random_items
 
 # Backup settings
 backup_zip = "./data/full20240202-1515.zip"
@@ -24,6 +23,10 @@ with CharterDb(pg_host, pg_password) as db:
         print("\n** Setting up database...")
         db.setup_db()
 
+        # insert index locations
+        print("\n** Inserting index locations...")
+        db.insert_index_locations()
+
         # insert users
         print("\n** Listing users...")
         users = backup.list_users()
@@ -35,6 +38,10 @@ with CharterDb(pg_host, pg_password) as db:
         images = ImagesFile(image_files_path).list_images()
         print(f"** Inserting {len(images)} images...")
         db.insert_images(images)
+
+        # Initialize person index
+        print("\n** Initializing person index...")
+        person_index = backup.init_person_index()
 
         # insert archives
         print("\n** Listing archives...")
@@ -50,8 +57,7 @@ with CharterDb(pg_host, pg_password) as db:
 
         # insert fond charters
         print("\n** Listing fond charters...")
-        # fonds = pick_random_items(fonds, 1)  # TODO: remove this line
-        fond_charters = backup.list_fond_charters(fonds, users)
+        fond_charters = backup.list_fond_charters(fonds, users, person_index)
         print(f"** Inserting {len(fond_charters)} fond charters...")
         db.insert_fonds_charters(fond_charters)
 
@@ -63,8 +69,9 @@ with CharterDb(pg_host, pg_password) as db:
 
         # insert collection charters
         print("\n** Listing collection charters...")
-        # collections = pick_random_items(collections, 1)  # TODO: remove this line
-        collection_charters = backup.list_collection_charters(collections, users)
+        collection_charters = backup.list_collection_charters(
+            collections, users, person_index
+        )
         print(f"** Inserting {len(collection_charters)} collection charters...")
         db.insert_collections_charters(collection_charters)
 
@@ -107,3 +114,8 @@ with CharterDb(pg_host, pg_password) as db:
         )
         print(f"** Inserting {len(public_charters)} public collection charters...")
         db.insert_public_charters(public_charters)
+
+        # insert indexes
+        public_charters = fond_charters + collection_charters
+        print(f"\n** Inserting {person_index.count_persons()} indexes...")
+        db.insert_person_index(person_index, public_charters)

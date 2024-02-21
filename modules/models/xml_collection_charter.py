@@ -2,6 +2,7 @@ from typing import List
 
 from lxml import etree
 
+from modules.models.person_index import PersonIndex
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_mycharter import XmlMycharter
@@ -15,6 +16,7 @@ class XmlCollectionCharter(XmlCharter):
         file: str,
         collection: XmlCollection,
         cei: etree._ElementTree,
+        person_index: None | PersonIndex = None,
         users: List[XmlUser] = [],
     ):
         # url
@@ -26,7 +28,9 @@ class XmlCollectionCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(file, cei, collection.image_base, url, users)
+        super().__init__(
+            file, cei, collection.image_base, url, users, person_index=person_index
+        )
 
         # collection_id
         self.collection_id = collection.id

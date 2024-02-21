@@ -6,8 +6,10 @@ from typing import List, Set, Type
 import validators
 from lxml import etree
 
-from modules.constants import NAMESPACES
+from modules.constants import NAMESPACES, IndexLocation
+from modules.models.person_index import PersonIndex
 from modules.models.serial_id_generator import SerialIDGenerator, T
+from modules.models.xml_person_name import XmlPersonName
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts, normalize_string
 
@@ -81,6 +83,7 @@ class XmlCharter:
         url: str,
         users: List[XmlUser] = [],
         override_id_gen_name: None | Type[T] = None,
+        person_index: None | PersonIndex = None,
     ):
         # id
         self.id = SerialIDGenerator().get_serial_id(
@@ -182,7 +185,8 @@ class XmlCharter:
                 self.issued_date_text = (
                     single_text if single_text is not None else range_text
                 )
-            if self.issued_date_text == "9999" or self.issued_date_text == "ohne Datum":
+            if self.issued_date_text == "9999":
+                # or self.issued_date_text == "ohne Datum"
                 self.issued_date_text = None
 
         self.last_editor_id = None
@@ -203,10 +207,8 @@ class XmlCharter:
             "./atom:content/cei:text/cei:body/cei:chDesc/cei:abstract",
             NAMESPACES,
         )
-        if (
-            abstract_ele is not None
-            and abstract_ele.text != "Noch kein Regest vorhanden."
-        ):
+        if abstract_ele is not None:
+            # and abstract_ele.text != "Noch kein Regest vorhanden."
             self.abstract = abstract_ele
 
         # tenor
@@ -214,3 +216,25 @@ class XmlCharter:
             "./atom:content/cei:text/cei:body/cei:tenor",
             NAMESPACES,
         )
+
+        # index_persons
+        self.person_names: List[XmlPersonName] = []
+        for person_name_cei in cei.findall(".//cei:back/cei:persName", NAMESPACES):
+            try:
+                name = XmlPersonName(self.id, person_name_cei, IndexLocation.BACK)
+                if name.text == "":
+                    continue
+                if person_index is not None:
+                    person = person_index.find_for_name(name)
+                    if person is not None:
+                        name.set_person_id(person.id)
+                    else:
+                        if name.wikidata_iri or name.key:
+                            print(
+                                f"Person not found in index for charter {self.atom_id}: {name.text} / {name.wikidata_iri} / {name.key}"
+                            )
+                self.person_names.append(name)
+            except Exception as e:
+                print(f"Error parsing person name in charter {self.atom_id}: {e}")
+        # TODO: abstract_persons
+        # TODO: tenor_persons

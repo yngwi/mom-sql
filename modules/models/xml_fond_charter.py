@@ -2,6 +2,7 @@ from typing import List
 
 from lxml import etree
 
+from modules.models.person_index import PersonIndex
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_fond import XmlFond
 from modules.models.xml_user import XmlUser
@@ -14,6 +15,7 @@ class XmlFondCharter(XmlCharter):
         file: str,
         fond: XmlFond,
         cei: etree._ElementTree,
+        person_index: PersonIndex,
         users: List[XmlUser],
     ):
         # url
@@ -26,7 +28,9 @@ class XmlFondCharter(XmlCharter):
         )
 
         # init base charter
-        super().__init__(file, cei, fond.image_base, url, users)
+        super().__init__(
+            file, cei, fond.image_base, url, users, person_index=person_index
+        )
 
         # archive_id
         self.archive_id = fond.archive_id

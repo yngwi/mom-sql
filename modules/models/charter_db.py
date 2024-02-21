@@ -1,13 +1,16 @@
 import io
 from datetime import date
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import psycopg
 from lxml import etree
 from psycopg import sql
 from psycopg.types.range import Range
 
+from modules.constants import IndexLocation
+from modules.models.person_index import PersonIndex
 from modules.models.xml_archive import XmlArchive
+from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
 from modules.models.xml_collection_charter import XmlCollectionCharter
 from modules.models.xml_fond import XmlFond
@@ -27,6 +30,20 @@ SETUP_QUERIES = """
         FOREIGN KEY (moderator_id) REFERENCES users(id)
     );
     CREATE INDEX ON users (moderator_id);
+
+    CREATE TABLE IF NOT EXISTS persons (
+        id SERIAL PRIMARY KEY,
+        label TEXT NOT NULL,
+        mom_iri TEXT UNIQUE,
+        wikidata_iri TEXT UNIQUE
+    );
+    CREATE INDEX ON persons (label);
+
+    CREATE TABLE IF NOT EXISTS index_locations (
+        id SERIAL PRIMARY KEY,
+        location TEXT UNIQUE NOT NULL
+    );
+    CREATE INDEX ON index_locations (location);
 
     CREATE TABLE IF NOT EXISTS private_collections (
         id SERIAL PRIMARY KEY,
@@ -188,6 +205,25 @@ SETUP_QUERIES = """
     );
     CREATE INDEX ON charters_images (charter_id);
     CREATE INDEX ON charters_images (image_id);
+
+    CREATE TABLE IF NOT EXISTS charters_person_names (
+        id SERIAL PRIMARY KEY,
+        charter_id INTEGER NOT NULL,
+        person_id INTEGER,
+        location_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        reg TEXT,
+        key TEXT,
+        FOREIGN KEY (charter_id) REFERENCES charters(id),
+        FOREIGN KEY (person_id) REFERENCES persons(id),
+        FOREIGN KEY (location_id) REFERENCES index_locations(id)
+    );
+    CREATE INDEX ON charters_person_names (charter_id);
+    CREATE INDEX ON charters_person_names (person_id);
+    CREATE INDEX ON charters_person_names (location_id);
+    CREATE INDEX ON charters_person_names (text);
+    CREATE INDEX ON charters_person_names (reg);
+    CREATE INDEX ON charters_person_names (key);
 
     CREATE TABLE IF NOT EXISTS saved_charters_images (
         saved_charter_id INTEGER NOT NULL,
@@ -392,6 +428,18 @@ class CharterDb:
         self._reset_db(reset_tables)
         self._cur.execute(SETUP_QUERIES)
         self._con.commit()
+
+    def insert_index_locations(self):
+        if not self._con or not self._cur:
+            return
+        for location in IndexLocation:
+            self._cur.execute(
+                "INSERT INTO index_locations (id, location) VALUES (%s, %s)",
+                (
+                    location.value,
+                    location.name,
+                ),
+            )
 
     def insert_collections(self, collections: List[XmlCollection]):
         if not self._con or not self._cur:
@@ -907,4 +955,44 @@ class CharterDb:
             "INSERT INTO charters_images (charter_id, image_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             charters_images_records,
         )
+        self._con.commit()
+
+    def insert_person_index(
+        self, person_index: PersonIndex, public_charters: Sequence[XmlCharter]
+    ):
+        if not self._con or not self._cur:
+            return
+        # insert persons
+        person_records = [
+            [
+                person.id,
+                ";".join(person.names),
+                person.mom_iri,
+                person.wikidata_iri,
+            ]
+            for person in person_index.list_persons()
+        ]
+        with self._cur.copy(
+            "COPY persons (id, label, mom_iri, wikidata_iri) FROM STDIN"
+        ) as copy:
+            for record in person_records:
+                copy.write_row(record)
+        # insert public charters person names
+        public_name_records = [
+            (
+                person_name.charter_id,
+                person_name.person_id,
+                person_name.location.value,
+                person_name.text,
+                person_name.reg,
+                person_name.key,
+            )
+            for charter in public_charters
+            for person_name in charter.person_names
+        ]
+        with self._cur.copy(
+            "COPY charters_person_names (charter_id, person_id, location_id, text, reg, key) FROM STDIN"
+        ) as copy:
+            for record in public_name_records:
+                copy.write_row(record)
         self._con.commit()

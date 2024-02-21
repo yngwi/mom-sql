@@ -4,6 +4,7 @@ from typing import Dict, List, Sequence
 from lxml import etree
 
 from modules.models.contents_xml import ContentsXml
+from modules.models.person_index import PersonIndex
 from modules.models.xml_archive import XmlArchive
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_collection import XmlCollection
@@ -143,7 +144,7 @@ class MomBackup:
         return fonds
 
     def list_fond_charters(
-        self, fonds: List[XmlFond], users: List[XmlUser]
+        self, fonds: List[XmlFond], users: List[XmlUser], person_index: PersonIndex
     ) -> List[XmlFondCharter]:
         charters: Dict[str, XmlFondCharter] = {}
         for fond in fonds:
@@ -164,7 +165,9 @@ class MomBackup:
                     print(f"Failed to open charter cei {cei_path}")
                     continue
                 try:
-                    charter = XmlFondCharter(charter_file, fond, cei, users)
+                    charter = XmlFondCharter(
+                        charter_file, fond, cei, person_index, users
+                    )
                     if charter.atom_id in charters:
                         print(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
@@ -188,7 +191,10 @@ class MomBackup:
         return collections
 
     def list_collection_charters(
-        self, collections: List[XmlCollection], users: List[XmlUser]
+        self,
+        collections: List[XmlCollection],
+        users: List[XmlUser],
+        person_index: PersonIndex,
     ) -> List[XmlCollectionCharter]:
         charters: Dict[str, XmlCollectionCharter] = {}
         for collection in collections:
@@ -209,7 +215,9 @@ class MomBackup:
                     print(f"Failed to open charter cei {cei_path}")
                     continue
                 try:
-                    charter = XmlCollectionCharter(charter_file, collection, cei, users)
+                    charter = XmlCollectionCharter(
+                        charter_file, collection, cei, person_index, users
+                    )
                     if charter.atom_id in charters:
                         print(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
@@ -390,11 +398,12 @@ class MomBackup:
             mycollections.append(mycollection)
         return mycollections
 
-    def list_index_persons(self) -> List[XmlIndexPerson]:
+    def init_person_index(self) -> PersonIndex:
         persons: List[XmlIndexPerson] = []
         contents_path = "db/mom-data/metadata.person.public"
         for index_file in self._list_resources(contents_path):
             index = XmlPersonIndex(index_file)
-            print(index.identifier, len(index.persons))
             persons.extend(index.persons)
-        return persons
+        person_index = PersonIndex()
+        person_index.add_all_xml_index_persons(persons)
+        return person_index
