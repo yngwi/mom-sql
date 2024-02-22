@@ -118,8 +118,9 @@ class CharterDb:
             return
         self._reset_db(reset_tables)
         self._cur.execute(_read_sql_file("sql/tables.sql"))
-        self._cur.execute(_read_sql_file("sql/indexes.sql"))
         self._cur.execute(_read_sql_file("sql/functions.sql"))
+        self._cur.execute(_read_sql_file("sql/alterations.sql"))
+        self._cur.execute(_read_sql_file("sql/indexes.sql"))
         self._con.commit()
 
     def insert_index_locations(self):

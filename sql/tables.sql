@@ -82,16 +82,6 @@ CREATE TABLE IF NOT EXISTS charters (
     url TEXT NOT NULL,
     FOREIGN KEY (last_editor_id) REFERENCES users (id)
 );
--- Add various calculated columns to the charters table
-ALTER TABLE charters ADD COLUMN abstract_fulltext TEXT GENERATED ALWAYS AS (
-    public.xpath_to_text(abstract::XML, './/text()')
-) STORED;
-ALTER TABLE charters ADD COLUMN issuer_text TEXT GENERATED ALWAYS AS (
-    public.xpath_to_text(abstract::XML, './/cei:issuer//text()')
-) STORED;
-ALTER TABLE charters ADD COLUMN tenor_fulltext TEXT GENERATED ALWAYS AS (
-    public.xpath_to_text(tenor::XML, './/text()')
-) STORED;
 
 -- Table for storing versions of charters that are being edited
 CREATE TABLE IF NOT EXISTS saved_charters (
