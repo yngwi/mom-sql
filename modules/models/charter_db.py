@@ -120,7 +120,6 @@ class CharterDb:
         self._cur.execute(_read_sql_file("sql/tables.sql"))
         self._cur.execute(_read_sql_file("sql/functions.sql"))
         self._cur.execute(_read_sql_file("sql/alterations.sql"))
-        self._cur.execute(_read_sql_file("sql/indexes.sql"))
         self._con.commit()
 
     def insert_index_locations(self):
@@ -651,7 +650,7 @@ class CharterDb:
         )
         self._con.commit()
 
-    def insert_index(
+    def insert_persons(
         self,
         person_index: PersonIndex,
         public_charters: List[XmlFondCharter | XmlCollectionCharter],
@@ -660,7 +659,7 @@ class CharterDb:
     ):
         if not self._con or not self._cur:
             return
-        # insert persons
+        # collect persons
         person_records = [
             [
                 person.id,
@@ -675,64 +674,94 @@ class CharterDb:
         ) as copy:
             for record in person_records:
                 copy.write_row(record)
-        # insert public charters person names
-        public_name_records = [
-            [
-                person_name.charter_id,
-                person_name.person_id,
-                person_name.location.value,
-                person_name.text,
-                person_name.reg,
-                person_name.key,
-            ]
-            for charter in public_charters
-            for person_name in charter.person_names
-        ]
-        with self._cur.copy(
-            "COPY charters_person_names (charter_id, person_id, location_id, text, reg, key) FROM STDIN"
-        ) as copy:
-            for record in public_name_records:
-                copy.write_row(record)
-        # insert private charters person names
-        private_name_records = [
-            [
-                person_name.charter_id,
-                person_name.person_id,
-                person_name.location.value,
-                person_name.text,
-                person_name.reg,
-                person_name.key,
-            ]
-            for charter in private_charters
-            for person_name in charter.person_names
-        ]
-        with self._cur.copy(
-            "COPY private_charters_person_names (private_charter_id, person_id, location_id, text, reg, key) FROM STDIN"
-        ) as copy:
-            for record in private_name_records:
-                copy.write_row(record)
-        # insert saved charters person names
-        self._cur.execute("SELECT id FROM saved_charters")
-        id_set: Set[int] = {id[0] for id in self._cur.fetchall()}
-        saved_name_records = []
-        for charter in saved_charters:
+        person_name_records = []
+        charters_person_name_records = []
+        # collect public charters person names
+        for charter in public_charters:
             for person_name in charter.person_names:
-                if person_name.charter_id not in id_set:
-                    print(f"charter not found: {person_name.charter_id}")
-                    continue
-                saved_name_records.append(
+                person_name_records.append(
                     [
-                        person_name.charter_id,
+                        person_name.id,
                         person_name.person_id,
-                        person_name.location.value,
                         person_name.text,
                         person_name.reg,
                         person_name.key,
                     ]
                 )
+                charters_person_name_records.append(
+                    [
+                        person_name.charter_id,
+                        person_name.id,
+                        person_name.location.value,
+                    ]
+                )
+        # collect private charters person names
+        private_charters_person_name_records = []
+        for charter in private_charters:
+            for person_name in charter.person_names:
+                person_name_records.append(
+                    [
+                        person_name.id,
+                        person_name.person_id,
+                        person_name.text,
+                        person_name.reg,
+                        person_name.key,
+                    ]
+                )
+                private_charters_person_name_records.append(
+                    [
+                        person_name.charter_id,
+                        person_name.id,
+                        person_name.location.value,
+                    ]
+                )
+        # collect saved charters person names
+        self._cur.execute("SELECT id FROM saved_charters")
+        id_set: Set[int] = {id[0] for id in self._cur.fetchall()}
+        saved_charters_person_names = []
+        for charter in saved_charters:
+            for person_name in charter.person_names:
+                if person_name.charter_id not in id_set:
+                    print(f"charter not found: {person_name.charter_id}")
+                    continue
+                person_name_records.append(
+                    [
+                        person_name.id,
+                        person_name.person_id,
+                        person_name.text,
+                        person_name.reg,
+                        person_name.key,
+                    ]
+                )
+                saved_charters_person_names.append(
+                    [
+                        person_name.charter_id,
+                        person_name.id,
+                        person_name.location.value,
+                    ]
+                )
+        # insert person name records
         with self._cur.copy(
-            "COPY saved_charters_person_names (saved_charter_id, person_id, location_id, text, reg, key) FROM STDIN"
+            "COPY person_names (id, person_id, text, reg, key) FROM STDIN"
         ) as copy:
-            for record in saved_name_records:
+            for record in person_name_records:
+                copy.write_row(record)
+        # insert charters person name records
+        with self._cur.copy(
+            "COPY charters_person_names (charter_id, person_name_id, location_id) FROM STDIN"
+        ) as copy:
+            for record in charters_person_name_records:
+                copy.write_row(record)
+        # insert private charters person name records
+        with self._cur.copy(
+            "COPY private_charters_person_names (private_charter_id, person_name_id, location_id) FROM STDIN"
+        ) as copy:
+            for record in private_charters_person_name_records:
+                copy.write_row(record)
+        # insert saved charters person name records
+        with self._cur.copy(
+            "COPY saved_charters_person_names (saved_charter_id, person_name_id, location_id) FROM STDIN"
+        ) as copy:
+            for record in saved_charters_person_names:
                 copy.write_row(record)
         self._con.commit()

@@ -201,6 +201,9 @@ class XmlCharter:
             # last_editor_email
             self.last_editor_email = email
 
+        # person_names
+        self.person_names: List[XmlPersonName] = []
+
         # abstract
         self.abstract: None | etree._Element = None
         abstract_ele = cei.find(
@@ -209,16 +212,53 @@ class XmlCharter:
         )
         if abstract_ele is not None:
             # and abstract_ele.text != "Noch kein Regest vorhanden."
+            for pers_name_ele in abstract_ele.findall(".//cei:persName", NAMESPACES):
+                try:
+                    name = XmlPersonName(self.id, pers_name_ele, IndexLocation.ABSTRACT)
+                    if name.text == "":
+                        continue
+                    self.person_names.append(name)
+
+                    person = person_index.find_for_name(name)
+                    name_pi = etree.ProcessingInstruction("person_names", str(name.id))
+                    pers_name_ele.insert(0, name_pi)
+                    if person is None:
+                        continue
+                    person_pi = etree.ProcessingInstruction("persons", str(person.id))
+                    pers_name_ele.insert(1, person_pi)
+                except Exception as e:
+                    print(
+                        f"Error parsing person name in charter cei:abstract {self.atom_id}: {e}"
+                    )
             self.abstract = abstract_ele
 
         # tenor
-        self.tenor: None | etree._Element = cei.find(
+        self.tenor: None | etree._Element = None
+        tenor_ele = cei.find(
             "./atom:content/cei:text/cei:body/cei:tenor",
             NAMESPACES,
         )
+        if tenor_ele is not None:
+            for pers_name_ele in tenor_ele.findall(".//cei:persName", NAMESPACES):
+                try:
+                    name = XmlPersonName(self.id, pers_name_ele, IndexLocation.TENOR)
+                    if name.text == "":
+                        continue
+                    self.person_names.append(name)
+                    name_pi = etree.ProcessingInstruction("person_names", str(name.id))
+                    pers_name_ele.insert(0, name_pi)
+                    person = person_index.find_for_name(name)
+                    if person is None:
+                        continue
+                    person_pi = etree.ProcessingInstruction("persons", str(person.id))
+                    pers_name_ele.insert(1, person_pi)
+                except Exception as e:
+                    print(
+                        f"Error parsing person name in charter cei:tenor {self.atom_id}: {e}"
+                    )
+            self.tenor = tenor_ele
 
-        # index_persons
-        self.person_names: List[XmlPersonName] = []
+        # index person_names
         for person_name_cei in cei.findall(".//cei:back/cei:persName", NAMESPACES):
             try:
                 name = XmlPersonName(self.id, person_name_cei, IndexLocation.BACK)
@@ -234,6 +274,6 @@ class XmlCharter:
                         )
                 self.person_names.append(name)
             except Exception as e:
-                print(f"Error parsing person name in charter {self.atom_id}: {e}")
-        # TODO: abstract_persons
-        # TODO: tenor_persons
+                print(
+                    f"Error parsing person name in charter cei:back {self.atom_id}: {e}"
+                )

@@ -5,7 +5,7 @@ from modules.models.images_file import ImagesFile
 from modules.models.mom_backup import MomBackup
 
 # Backup settings
-backup_zip = "./data/full20240202-1515.zip"
+backup_zip = "./data/full20240223-0400.zip"
 # backup_zip = "./data/full20210819-0400.zip"
 
 # Image file list settings
@@ -121,8 +121,8 @@ with CharterDb(pg_host, pg_password) as db:
 
         public_charters = public_charters + public_mycharters
 
-        # insert indexes
+        # insert persons
         print(f"\n** Inserting {person_index.count_persons()} indexes...")
-        db.insert_index(
+        db.insert_persons(
             person_index, public_charters, private_mycharters, saved_charters
         )
