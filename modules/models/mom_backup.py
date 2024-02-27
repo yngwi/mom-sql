@@ -3,6 +3,7 @@ from typing import Dict, List, Sequence
 
 from lxml import etree
 
+from modules.logger import Logger
 from modules.models.contents_xml import ContentsXml
 from modules.models.person_index import PersonIndex
 from modules.models.xml_archive import XmlArchive
@@ -18,6 +19,8 @@ from modules.models.xml_person_index import XmlPersonIndex
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts
+
+log = Logger()
 
 
 class MomBackup:
@@ -101,7 +104,7 @@ class MomBackup:
                 continue
             file_lower = file.lower()
             if file_lower in users:
-                print(
+                log.warn(
                     f"Different case for {file}. Potential conflict with {users[file_lower].file}. Skipping"
                 )
                 continue
@@ -137,7 +140,7 @@ class MomBackup:
                 preferences_path = f"db/mom-data/metadata.fond.public/{archive.file}/{fond_file}/{fond_file}.preferences.xml"
                 ead = self._get_xml_optional(ead_path)
                 if ead is None:
-                    print(f"Failed to open fond ead {ead_path}")
+                    log.warn(f"Failed to open fond ead {ead_path}")
                     continue
                 preferences = self._get_xml_optional(preferences_path)
                 fonds.append(XmlFond(fond_file, archive, ead, preferences))
@@ -155,26 +158,27 @@ class MomBackup:
             try:
                 contents = self._get_contents(contents_path)
             except KeyError:
-                print(f"No content for fond {fond.archive_file}; {fond.identifier}")
+                log.warn(f"No content for fond {fond.archive_file}; {fond.identifier}")
                 continue
             for charter_entry in contents.resources:
                 charter_file = charter_entry.file
                 cei_path = f"db/mom-data/metadata.charter.public/{fond.archive_file}/{fond.file}/{charter_file}"
                 cei = self._get_xml_optional(cei_path)
                 if cei is None:
-                    print(f"Failed to open charter cei {cei_path}")
+                    log.warn(f"Failed to open charter cei {cei_path}")
                     continue
                 try:
                     charter = XmlFondCharter(
                         charter_file, fond, cei, person_index, users
                     )
                     if charter.atom_id in charters:
-                        print(f"Duplicate charter {charter.atom_id}. Skipping")
+                        log.warn(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
                     else:
                         charters[charter.atom_id] = charter
                 except Exception as e:
-                    print(f"Failed to create charter {cei_path}: {e}")
+                    log.error(f"Failed to create charter {cei_path}: {e}")
+                    continue
         return list(charters.values())
 
     def list_collections(self, fonds: List[XmlFond]) -> List[XmlCollection]:
@@ -185,7 +189,7 @@ class MomBackup:
             cei_path = f"db/mom-data/metadata.collection.public/{file}/{file}.cei.xml"
             cei = self._get_xml_optional(cei_path)
             if cei is None:
-                print(f"Failed to open collection cei {cei_path}")
+                log.warn(f"Failed to open collection cei {cei_path}")
                 continue
             collections.append(XmlCollection(file, cei, fonds))
         return collections
@@ -203,7 +207,7 @@ class MomBackup:
             try:
                 contents = self._get_contents(contents_path)
             except KeyError:
-                print(
+                log.warn(
                     f"No content for collection {collection.file}; {collection.identifier}"
                 )
                 continue
@@ -212,19 +216,20 @@ class MomBackup:
                 cei_path = f"db/mom-data/metadata.charter.public/{collection.file}/{charter_file}"
                 cei = self._get_xml_optional(cei_path)
                 if cei is None:
-                    print(f"Failed to open charter cei {cei_path}")
+                    log.warn(f"Failed to open charter cei {cei_path}")
                     continue
                 try:
                     charter = XmlCollectionCharter(
                         charter_file, collection, cei, person_index, users
                     )
                     if charter.atom_id in charters:
-                        print(f"Duplicate charter {charter.atom_id}. Skipping")
+                        log.warn(f"Duplicate charter {charter.atom_id}. Skipping")
                         continue
                     else:
                         charters[charter.atom_id] = charter
                 except Exception as e:
-                    print(f"Failed to create charter {cei_path}: {e}")
+                    log.error(f"Failed to create charter {cei_path}: {e}")
+                    continue
         return list(charters.values())
 
     def list_saved_charters(
@@ -245,12 +250,12 @@ class MomBackup:
                     saved_file, cei, users, fonds, collections, person_index
                 )
                 if charter.atom_id in charters_map:
-                    print(f"Duplicate charter {charter.atom_id}. Skipping")
+                    log.warn(f"Duplicate charter {charter.atom_id}. Skipping")
                     continue
                 else:
                     charters_map[charter.atom_id] = charter
             except Exception as e:
-                print(f"Failed to create charter {contents_path}: {e}")
+                log.error(f"Failed to create charter {contents_path}: {e}")
                 continue
         charters: List[XmlSavedCharter] = []
         for user in users:
@@ -298,7 +303,7 @@ class MomBackup:
                             charter.add_shared_users(shared_xrx, user_map)
                         mycharters[charter.atom_id] = charter
                     except Exception as e:
-                        print(f"Failed to create mycharter {path}: {e}")
+                        log.error(f"Failed to create mycharter {path}: {e}")
         return list(mycharters.values())
 
     def list_public_charters(
@@ -325,19 +330,19 @@ class MomBackup:
                         None,
                     )
                     if source_charter is None:
-                        print(
+                        log.warn(
                             f"Failed to find private source charter for {collection.owner_email}; {collection.atom_id}; {charter.atom_id}"
                         )
                     else:
                         charter.set_source_mycharter(source_charter)
                     if charter.atom_id in charters:
-                        print(
+                        log.warn(
                             f"Duplicate charter {collection.owner_email}; {collection.atom_id}; {charter.atom_id}. Skipping"
                         )
                         continue
                     charters[charter.atom_id] = charter
                 except Exception as e:
-                    print(f"Failed to create mycharter {cei_path}: {e}")
+                    log.error(f"Failed to create mycharter {cei_path}: {e}")
                     continue
         return list(charters.values())
 
@@ -352,7 +357,7 @@ class MomBackup:
             for cei in cei_files:
                 mycollection = XmlMycollection(file, cei, user)
                 if mycollection.atom_id in my_collections:
-                    print(
+                    log.warn(
                         f"Duplicate mycollection {mycollection.file}/{mycollection.atom_id}. Skipping"
                     )
                     continue
@@ -369,7 +374,7 @@ class MomBackup:
             cei_path = f"db/mom-data/metadata.mycollection.public/{file}/{file}.mycollection.xml"
             cei = self._get_xml_optional(cei_path)
             if cei is None:
-                print(f"Failed to open mycollection cei {cei_path}")
+                log.warn(f"Failed to open mycollection cei {cei_path}")
                 continue
             mycollection = XmlMycollection(file, cei, None, True)
             oai_path = f"db/mom-data/metadata.mycollection.public/{file}/oai.xml"
@@ -380,7 +385,7 @@ class MomBackup:
                 (u for u in users if u.email == mycollection.author_email), None
             )
             if user is None:
-                print(
+                log.error(
                     f"Failed to find user for mycollection {mycollection.author_email}"
                 )
                 continue
@@ -395,7 +400,7 @@ class MomBackup:
                 None,
             )
             if private_mycollection is None:
-                print(
+                log.error(
                     f"Failed to find private mycollection for {mycollection.atom_id} and {user.email}"
                 )
                 continue

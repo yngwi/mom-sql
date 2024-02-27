@@ -3,8 +3,11 @@ from typing import Dict, List
 from lxml import etree
 
 from modules.constants import NAMESPACES
+from modules.logger import Logger
 from modules.models.serial_id_generator import SerialIDGenerator
 from modules.utils import normalize_string, parse_date
+
+log = Logger()
 
 
 class Bookmark:
@@ -97,4 +100,4 @@ class XmlUser:
             try:
                 self.saved_charters.append(SavedCharter(saved))
             except Exception as e:
-                print(f"Cannot parse saved charter for user {self.email}: {e}")
+                log.error(f"Cannot parse saved charter for user {self.email}: {e}")

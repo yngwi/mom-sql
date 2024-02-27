@@ -1,3 +1,4 @@
 /data
+/logs
 *.sqlite3
 .sqls.yml

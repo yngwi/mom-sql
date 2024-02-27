@@ -8,6 +8,7 @@ from psycopg import sql
 from psycopg.types.range import Range
 
 from modules.constants import IndexLocation
+from modules.logger import Logger
 from modules.models.person_index import PersonIndex
 from modules.models.xml_archive import XmlArchive
 from modules.models.xml_collection import XmlCollection
@@ -18,6 +19,8 @@ from modules.models.xml_mycharter import XmlMycharter
 from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_saved_charter import XmlSavedCharter
 from modules.models.xml_user import XmlUser
+
+log = Logger()
 
 
 def _read_sql_file(path: str) -> LiteralString:
@@ -87,7 +90,7 @@ class CharterDb:
                 cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", [self._db])
                 db_exists = cur.fetchone()
                 if not db_exists:
-                    print(f"Database {self._db} does not exist. Creating...")
+                    log.debug(f"Database {self._db} does not exist. Creating...")
                     cur.execute(
                         sql.SQL("CREATE DATABASE {};").format(sql.Identifier(self._db))
                     )
@@ -110,7 +113,7 @@ class CharterDb:
             self._cur.execute(
                 sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
             )
-            print(f"Table {table} dropped")
+            log.debug(f"Table {table} dropped")
         self._con.commit()
 
     def setup_db(self, reset_tables: List[str] = []):
@@ -224,11 +227,13 @@ class CharterDb:
         charter_records = []
         for charter in charters:
             if charter.url is None:
-                print(f"URL not found for saved charter {charter.atom_id}")
+                log.warn(f"URL not found for saved charter {charter.atom_id}")
                 continue
             original_id = atom_id_to_charter_id_map.get(charter.atom_id, None)
             if original_id is None:
-                print(f"Original charter not found for saved charter {charter.atom_id}")
+                log.warn(
+                    f"Original charter not found for saved charter {charter.atom_id}"
+                )
                 continue
             charter_records.append(
                 [
@@ -722,7 +727,8 @@ class CharterDb:
         for charter in saved_charters:
             for person_name in charter.person_names:
                 if person_name.charter_id not in id_set:
-                    print(f"charter not found: {person_name.charter_id}")
+                    # Skip person names that are from saved charters that
+                    # could not be saved in the database
                     continue
                 person_name_records.append(
                     [

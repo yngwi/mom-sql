@@ -3,10 +3,13 @@ from typing import Dict, List
 from lxml import etree
 
 from modules.constants import NAMESPACES
+from modules.logger import Logger
 from modules.models.person_index import PersonIndex
 from modules.models.xml_charter import XmlCharter
 from modules.models.xml_mycollection import XmlMycollection
 from modules.models.xml_user import XmlUser
+
+log = Logger()
 
 
 class XmlMycharter(XmlCharter):
@@ -64,7 +67,7 @@ class XmlMycharter(XmlCharter):
             if user_email in users:
                 id = users[user_email].id
                 if id in unique_ids:
-                    print(f"User {user_email} already shared with charter {self.id}")
+                    log.warn(f"User {user_email} already shared with charter {self.id}")
                     continue
                 unique_ids[id] = id
             self.shared_with_user_ids = list(unique_ids.keys())

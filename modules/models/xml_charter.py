@@ -7,11 +7,14 @@ import validators
 from lxml import etree
 
 from modules.constants import NAMESPACES, IndexLocation
+from modules.logger import Logger
 from modules.models.person_index import PersonIndex
 from modules.models.serial_id_generator import SerialIDGenerator, T
 from modules.models.xml_person_name import XmlPersonName
 from modules.models.xml_user import XmlUser
 from modules.utils import join_url_parts, normalize_string
+
+log = Logger()
 
 MOM_DATE_REGEX = re.compile(
     r"^(?P<year>-?[0129]?[0-9][0-9][0-9])(?P<month>[019][0-9])(?P<day>[01239][0-9])$"
@@ -160,9 +163,9 @@ class XmlCharter:
                     self.sort_date = dates[-1]
                     self.issued_date = (dates[0], dates[-1])
                 elif len(dates) > 2:
-                    print(f"Too many dates found for charter {self.atom_id}")
+                    log.warn(f"Too many dates found for charter {self.atom_id}")
             except ValueError as e:
-                print(f"Error parsing date for charter {self.atom_id}: {e}")
+                log.warn(f"Error parsing date for charter {self.atom_id}: {e}")
             if self.issued_date is not None:
                 self.issued_date_is_exact = self.issued_date[0] == self.issued_date[1]
             single_text = _extract_opt_text(date_single_element)
@@ -179,7 +182,7 @@ class XmlCharter:
                 if single_text == range_text:
                     self.issued_date_text = single_text
                 else:
-                    print(f"Conflicting date texts found for charter {self.atom_id}")
+                    log.warn(f"Conflicting date texts found for charter {self.atom_id}")
                     self.issued_date_text = single_text
             else:
                 self.issued_date_text = (
@@ -227,7 +230,7 @@ class XmlCharter:
                     person_pi = etree.ProcessingInstruction("persons", str(person.id))
                     pers_name_ele.insert(1, person_pi)
                 except Exception as e:
-                    print(
+                    log.error(
                         f"Error parsing person name in charter cei:abstract {self.atom_id}: {e}"
                     )
             self.abstract = abstract_ele
@@ -253,7 +256,7 @@ class XmlCharter:
                     person_pi = etree.ProcessingInstruction("persons", str(person.id))
                     pers_name_ele.insert(1, person_pi)
                 except Exception as e:
-                    print(
+                    log.error(
                         f"Error parsing person name in charter cei:tenor {self.atom_id}: {e}"
                     )
             self.tenor = tenor_ele
@@ -269,11 +272,11 @@ class XmlCharter:
                     name.set_person_id(person.id)
                 else:
                     if name.wikidata_iri or name.key:
-                        print(
+                        log.warn(
                             f"Person not found in index for charter {self.atom_id}: {name.text} / {name.wikidata_iri} / {name.key}"
                         )
                 self.person_names.append(name)
             except Exception as e:
-                print(
+                log.error(
                     f"Error parsing person name in charter cei:back {self.atom_id}: {e}"
                 )
