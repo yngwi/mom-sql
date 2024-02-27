@@ -125,7 +125,6 @@ BEGIN
     else
         -- Replace the existing processing instruction with the new one.
         old_pi := format('<?%s %s?>', proc_inst_name, existing_pi_content);
-       raise notice '%', old_pi;
         xml_output := regexp_replace(xml_input::text, public.regexp_escape(old_pi), new_pi, 1, 1, 'g');
     end if;
     return xml_output::xml;
@@ -196,7 +195,6 @@ AS $function$
                 inner join public.person_names pn on pn.id = cpn.person_name_id  
                 where cpn.charter_id = NEW.id and pn.location_id = current_location_id and not (cpn.person_name_id = any (existing_person_name_ids))
         );
-        raise notice '%', to_delete_person_name_ids;
         delete from public.charters_person_names where (person_name_id = any( to_delete_person_name_ids));
         delete from public.person_names where (id = any( to_delete_person_name_ids));
         new.abstract := abstract;
