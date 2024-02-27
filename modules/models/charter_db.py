@@ -116,6 +116,31 @@ class CharterDb:
             log.debug(f"Table {table} dropped")
         self._con.commit()
 
+    def reset_serial_id_sequences(self):
+        if not self._con or not self._cur:
+            return
+        query = """
+            SELECT sequence_name, table_name, column_name 
+            FROM information_schema.sequences 
+            JOIN information_schema.columns 
+                ON CONCAT(columns.table_name, '_', columns.column_name, '_seq') = sequences.sequence_name
+            WHERE sequence_schema = 'public';
+        """
+        self._cur.execute(query)
+        sequences = self._cur.fetchall()
+        for sequence_name, table_name, column_name in sequences:
+            self._cur.execute(
+                sql.SQL(
+                    "SELECT setval('{sequence}', COALESCE((SELECT MAX({column}) FROM {table}) + 1, 1), false);"
+                ).format(
+                    sequence=sql.Identifier(sequence_name),
+                    column=sql.Identifier(column_name),
+                    table=sql.Identifier(table_name),
+                ),
+            )
+
+        self._con.commit()
+
     def setup_db(self, reset_tables: List[str] = []):
         if not self._con or not self._cur:
             return

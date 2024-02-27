@@ -129,4 +129,8 @@ with CharterDb(pg_host, pg_password) as db:
             person_index, public_charters, private_mycharters, saved_charters
         )
 
+        # reset sequences
+        log.info("Resetting id sequences...")
+        db.reset_serial_id_sequences()
+
         log.info("Database import complete")
