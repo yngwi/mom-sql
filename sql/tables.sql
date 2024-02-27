@@ -3,9 +3,8 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     first_name TEXT,
-    moderator_id INTEGER,
-    name TEXT,
-    FOREIGN KEY (moderator_id) REFERENCES users (id)
+    moderator_id INTEGER REFERENCES users (id),
+    name TEXT
 );
 CREATE INDEX ON users (moderator_id);
 
@@ -31,8 +30,7 @@ CREATE TABLE IF NOT EXISTS private_collections (
     atom_id TEXT NOT NULL UNIQUE,
     identifier TEXT NOT NULL,
     title TEXT NOT NULL,
-    owner_id INTEGER NOT NULL,
-    FOREIGN KEY (owner_id) REFERENCES users (id)
+    owner_id INTEGER NOT NULL REFERENCES users (id)
 );
 CREATE INDEX ON private_collections (owner_id);
 
@@ -43,9 +41,8 @@ CREATE TABLE IF NOT EXISTS collections (
     identifier TEXT NOT NULL,
     image_base TEXT,
     oai_shared BOOLEAN DEFAULT FALSE,
-    source_collection_id INTEGER,
-    title TEXT NOT NULL,
-    FOREIGN KEY (source_collection_id) REFERENCES private_collections (id)
+    source_collection_id INTEGER REFERENCES private_collections (id),
+    title TEXT NOT NULL
 );
 CREATE INDEX ON collections (source_collection_id);
 
@@ -62,14 +59,13 @@ CREATE TABLE IF NOT EXISTS archives (
 -- Table for fonds within an archive
 CREATE TABLE IF NOT EXISTS fonds (
     id SERIAL PRIMARY KEY,
-    archive_id INTEGER NOT NULL,
+    archive_id INTEGER NOT NULL REFERENCES archives (id),
     atom_id TEXT NOT NULL UNIQUE,
     free_image_access BOOLEAN NOT NULL DEFAULT FALSE,
     identifier TEXT NOT NULL,
     image_base TEXT,
     oai_shared BOOLEAN DEFAULT FALSE,
-    title TEXT NOT NULL,
-    FOREIGN KEY (archive_id) REFERENCES archives (id)
+    title TEXT NOT NULL
 );
 CREATE INDEX ON fonds (archive_id);
 CREATE INDEX ON fonds (image_base);
@@ -83,11 +79,10 @@ CREATE TABLE IF NOT EXISTS charters (
     idno_text TEXT,
     issued_date DATERANGE,
     issued_date_text TEXT,
-    last_editor_id INTEGER,
+    last_editor_id INTEGER REFERENCES users (id),
     sort_date DATE NOT NULL DEFAULT CURRENT_DATE,
     tenor XML,
-    url TEXT NOT NULL,
-    FOREIGN KEY (last_editor_id) REFERENCES users (id)
+    url TEXT NOT NULL
 );
 CREATE INDEX ON charters (last_editor_id);
 CREATE INDEX ON charters (sort_date);
@@ -98,19 +93,17 @@ CREATE TABLE IF NOT EXISTS saved_charters (
     id SERIAL PRIMARY KEY,
     abstract XML,
     atom_id TEXT NOT NULL UNIQUE,
-    editor_id INTEGER NOT NULL,
+    editor_id INTEGER NOT NULL REFERENCES users (id),
     idno_id TEXT,
     idno_text TEXT,
     is_released BOOLEAN NOT NULL DEFAULT FALSE,
     issued_date DATERANGE,
     issued_date_text TEXT,
-    original_charter_id INTEGER NOT NULL,
+    original_charter_id INTEGER NOT NULL REFERENCES charters (id),
     sort_date DATE NOT NULL DEFAULT CURRENT_DATE,
     start_time TIMESTAMP NOT NULL,
     tenor XML,
-    url TEXT NOT NULL,
-    FOREIGN KEY (editor_id) REFERENCES users (id),
-    FOREIGN KEY (original_charter_id) REFERENCES charters (id)
+    url TEXT NOT NULL
 );
 CREATE INDEX ON saved_charters (editor_id);
 CREATE INDEX ON saved_charters (sort_date);
@@ -124,12 +117,10 @@ CREATE TABLE IF NOT EXISTS private_charters (
     idno_text TEXT,
     issued_date DATERANGE,
     issued_date_text TEXT,
-    private_collection_id INTEGER NOT NULL,
+    private_collection_id INTEGER NOT NULL REFERENCES private_collections (id),
     sort_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    source_charter_id INTEGER,
-    tenor XML,
-    FOREIGN KEY (private_collection_id) REFERENCES private_collections (id),
-    FOREIGN KEY (source_charter_id) REFERENCES charters (id)
+    source_charter_id INTEGER REFERENCES charters (id),
+    tenor XML
 );
 CREATE INDEX ON private_charters (private_collection_id);
 CREATE INDEX ON private_charters (sort_date);
@@ -137,10 +128,8 @@ CREATE INDEX ON private_charters (source_charter_id);
 
 -- Table for sharing private charters with other users
 CREATE TABLE IF NOT EXISTS private_charter_user_shares (
-    private_charter_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    FOREIGN KEY (private_charter_id) REFERENCES private_charters (id),
-    FOREIGN KEY (user_id) REFERENCES users (id),
+    private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
+    user_id INTEGER NOT NULL REFERENCES users (id),
     PRIMARY KEY (private_charter_id, user_id)
 );
 CREATE INDEX ON private_charter_user_shares (private_charter_id);
@@ -148,12 +137,9 @@ CREATE INDEX ON private_charter_user_shares (user_id);
 
 -- Association table for collections and charters
 CREATE TABLE IF NOT EXISTS collections_charters (
-    collection_id INTEGER NOT NULL,
-    charter_id INTEGER NOT NULL,
-    private_charter_id INTEGER,
-    FOREIGN KEY (collection_id) REFERENCES collections (id),
-    FOREIGN KEY (charter_id) REFERENCES charters (id),
-    FOREIGN KEY (private_charter_id) REFERENCES private_charters (id),
+    collection_id INTEGER NOT NULL REFERENCES collections (id),
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
+    private_charter_id INTEGER REFERENCES private_charters (id),
     PRIMARY KEY (collection_id, charter_id)
 );
 CREATE INDEX ON collections_charters (charter_id);
@@ -162,10 +148,8 @@ CREATE INDEX ON collections_charters (private_charter_id);
 
 -- Association table for fonds and charters
 CREATE TABLE IF NOT EXISTS fonds_charters (
-    fond_id INTEGER NOT NULL,
-    charter_id INTEGER NOT NULL,
-    FOREIGN KEY (fond_id) REFERENCES fonds (id),
-    FOREIGN KEY (charter_id) REFERENCES charters (id),
+    fond_id INTEGER NOT NULL REFERENCES fonds (id),
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
     PRIMARY KEY (fond_id, charter_id)
 );
 CREATE INDEX ON fonds_charters (charter_id);
@@ -173,10 +157,8 @@ CREATE INDEX ON fonds_charters (fond_id);
 
 -- Association table for collections and fonds
 CREATE TABLE IF NOT EXISTS collection_fonds (
-    collection_id INTEGER NOT NULL,
-    fond_id INTEGER NOT NULL,
-    FOREIGN KEY (collection_id) REFERENCES collections (id),
-    FOREIGN KEY (fond_id) REFERENCES fonds (id),
+    collection_id INTEGER NOT NULL REFERENCES collections (id),
+    fond_id INTEGER NOT NULL REFERENCES fonds (id),
     PRIMARY KEY (collection_id, fond_id)
 );
 CREATE INDEX ON collection_fonds (collection_id);
@@ -191,10 +173,8 @@ CREATE TABLE IF NOT EXISTS images (
 
 -- Association table for charters and images
 CREATE TABLE IF NOT EXISTS charters_images (
-    charter_id INTEGER NOT NULL,
-    image_id INTEGER NOT NULL,
-    FOREIGN KEY (charter_id) REFERENCES charters (id),
-    FOREIGN KEY (image_id) REFERENCES images (id),
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
+    image_id INTEGER NOT NULL REFERENCES images (id),
     PRIMARY KEY (charter_id, image_id)
 );
 CREATE INDEX ON charters_images (charter_id);
@@ -202,13 +182,14 @@ CREATE INDEX ON charters_images (image_id);
 
 CREATE TABLE IF NOT EXISTS person_names (
     id SERIAL PRIMARY KEY,
-    person_id INTEGER,
-    text TEXT NOT NULL,
-    reg TEXT,
     key TEXT,
-    FOREIGN KEY (person_id) REFERENCES persons (id)
+    location_id INTEGER NOT NULL REFERENCES index_locations (id),
+    person_id INTEGER REFERENCES persons (id),
+    reg TEXT,
+    text TEXT NOT NULL
 );
 CREATE INDEX ON person_names (key);
+CREATE INDEX ON person_names (location_id);
 CREATE INDEX ON person_names (person_id);
 CREATE INDEX ON person_names (reg);
 CREATE INDEX ON person_names (text);
@@ -216,39 +197,27 @@ CREATE INDEX ON person_names (text);
 
 -- Table to store person names mentioned in charters
 CREATE TABLE IF NOT EXISTS charters_person_names (
-    charter_id INTEGER NOT NULL,
-    person_name_id INTEGER NOT NULL,
-    location_id INTEGER NOT NULL,
-    PRIMARY KEY (charter_id, person_name_id),
-    FOREIGN KEY (charter_id) REFERENCES charters (id),
-    FOREIGN KEY (person_name_id) REFERENCES person_names (id),
-    FOREIGN KEY (location_id) REFERENCES index_locations (id)
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
+    person_name_id INTEGER NOT NULL REFERENCES person_names (id),
+    PRIMARY KEY (charter_id, person_name_id)
 );
 CREATE INDEX ON charters_person_names (charter_id);
-CREATE INDEX ON charters_person_names (location_id);
 CREATE INDEX ON charters_person_names (person_name_id);
 
 -- Similar to `charters_person_names` but for saved charters
 CREATE TABLE IF NOT EXISTS saved_charters_person_names (
-    saved_charter_id INTEGER NOT NULL,
-    person_name_id INTEGER NOT NULL,
-    location_id INTEGER NOT NULL,
-    PRIMARY KEY (saved_charter_id, person_name_id),
-    FOREIGN KEY (saved_charter_id) REFERENCES saved_charters (id),
-    FOREIGN KEY (person_name_id) REFERENCES person_names (id),
-    FOREIGN KEY (location_id) REFERENCES index_locations (id)
+    saved_charter_id INTEGER NOT NULL REFERENCES saved_charters (id),
+    person_name_id INTEGER NOT NULL REFERENCES person_names (id),
+    PRIMARY KEY (saved_charter_id, person_name_id)
 );
-CREATE INDEX ON saved_charters_person_names (location_id);
 CREATE INDEX ON saved_charters_person_names (person_name_id);
 CREATE INDEX ON saved_charters_person_names (saved_charter_id);
 
 
 -- Association table for saved charters and images
 CREATE TABLE IF NOT EXISTS saved_charters_images (
-    saved_charter_id INTEGER NOT NULL,
-    image_id INTEGER NOT NULL,
-    FOREIGN KEY (saved_charter_id) REFERENCES saved_charters (id),
-    FOREIGN KEY (image_id) REFERENCES images (id),
+    saved_charter_id INTEGER NOT NULL REFERENCES saved_charters (id),
+    image_id INTEGER NOT NULL REFERENCES images (id),
     PRIMARY KEY (saved_charter_id, image_id)
 );
 CREATE INDEX ON saved_charters_images (image_id);
@@ -256,10 +225,8 @@ CREATE INDEX ON saved_charters_images (saved_charter_id);
 
 -- Association table for private charters and images
 CREATE TABLE IF NOT EXISTS private_charters_images (
-    private_charter_id INTEGER NOT NULL,
-    image_id INTEGER NOT NULL,
-    FOREIGN KEY (private_charter_id) REFERENCES private_charters (id),
-    FOREIGN KEY (image_id) REFERENCES images (id),
+    private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
+    image_id INTEGER NOT NULL REFERENCES images (id),
     PRIMARY KEY (private_charter_id, image_id)
 );
 CREATE INDEX ON private_charters_images (image_id);
@@ -267,25 +234,18 @@ CREATE INDEX ON private_charters_images (private_charter_id);
 
 -- Similar to `charters_person_names` but for private charters
 CREATE TABLE IF NOT EXISTS private_charters_person_names (
-    private_charter_id INTEGER NOT NULL,
-    person_name_id INTEGER NOT NULL,
-    location_id INTEGER NOT NULL,
-    PRIMARY KEY (private_charter_id, person_name_id),
-    FOREIGN KEY (private_charter_id) REFERENCES private_charters (id),
-    FOREIGN KEY (person_name_id) REFERENCES person_names (id),
-    FOREIGN KEY (location_id) REFERENCES index_locations (id)
+    private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
+    person_name_id INTEGER NOT NULL REFERENCES person_names (id),
+    PRIMARY KEY (private_charter_id, person_name_id)
 );
-CREATE INDEX ON private_charters_person_names (location_id);
 CREATE INDEX ON private_charters_person_names (person_name_id);
 CREATE INDEX ON private_charters_person_names (private_charter_id);
 
 -- Table for users to bookmark charters with optional notes
 CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
-    user_id INTEGER NOT NULL,
-    charter_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
     note TEXT,
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (charter_id) REFERENCES charters (id),
     PRIMARY KEY (user_id, charter_id)
 );
 CREATE INDEX ON user_charter_bookmarks (charter_id);

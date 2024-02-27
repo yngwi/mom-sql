@@ -15,7 +15,6 @@ image_files_path = "./data/filelist_20240209.txt"
 pg_password = os.environ.get("PG_PW")
 pg_host = os.environ.get("PG_HOST")
 
-
 print(f"*** Connecting to database at {pg_host}")
 with CharterDb(pg_host, pg_password) as db:
     print(f"*** Opening zip file {backup_zip}...")

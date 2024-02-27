@@ -686,13 +686,13 @@ class CharterDb:
                         person_name.text,
                         person_name.reg,
                         person_name.key,
+                        person_name.location.value,
                     ]
                 )
                 charters_person_name_records.append(
                     [
                         person_name.charter_id,
                         person_name.id,
-                        person_name.location.value,
                     ]
                 )
         # collect private charters person names
@@ -706,13 +706,13 @@ class CharterDb:
                         person_name.text,
                         person_name.reg,
                         person_name.key,
+                        person_name.location.value,
                     ]
                 )
                 private_charters_person_name_records.append(
                     [
                         person_name.charter_id,
                         person_name.id,
-                        person_name.location.value,
                     ]
                 )
         # collect saved charters person names
@@ -731,36 +731,36 @@ class CharterDb:
                         person_name.text,
                         person_name.reg,
                         person_name.key,
+                        person_name.location.value,
                     ]
                 )
                 saved_charters_person_names.append(
                     [
                         person_name.charter_id,
                         person_name.id,
-                        person_name.location.value,
                     ]
                 )
         # insert person name records
         with self._cur.copy(
-            "COPY person_names (id, person_id, text, reg, key) FROM STDIN"
+            "COPY person_names (id, person_id, text, reg, key, location_id) FROM STDIN"
         ) as copy:
             for record in person_name_records:
                 copy.write_row(record)
         # insert charters person name records
         with self._cur.copy(
-            "COPY charters_person_names (charter_id, person_name_id, location_id) FROM STDIN"
+            "COPY charters_person_names (charter_id, person_name_id) FROM STDIN"
         ) as copy:
             for record in charters_person_name_records:
                 copy.write_row(record)
         # insert private charters person name records
         with self._cur.copy(
-            "COPY private_charters_person_names (private_charter_id, person_name_id, location_id) FROM STDIN"
+            "COPY private_charters_person_names (private_charter_id, person_name_id) FROM STDIN"
         ) as copy:
             for record in private_charters_person_name_records:
                 copy.write_row(record)
         # insert saved charters person name records
         with self._cur.copy(
-            "COPY saved_charters_person_names (saved_charter_id, person_name_id, location_id) FROM STDIN"
+            "COPY saved_charters_person_names (saved_charter_id, person_name_id) FROM STDIN"
         ) as copy:
             for record in saved_charters_person_names:
                 copy.write_row(record)
