@@ -29,7 +29,7 @@ elements.
 
 _Note:_ Only some of the XML content is exacted as the whole process related to
 the XML content is only intended to be a proof-of-concept, as has been stated
-above.
+above. More could be added at any time.
 
 ### Examplary questions that can be answered with the new database
 
