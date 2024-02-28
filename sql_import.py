@@ -133,4 +133,9 @@ with CharterDb(pg_host, pg_password) as db:
         log.info("Resetting id sequences...")
         db.reset_serial_id_sequences()
 
+        # enable triggers
+        log.info("Enabling triggers...")
+        db.enable_triggers()
+
+        # finished
         log.info("Database import complete")

@@ -7,7 +7,7 @@ class Logger:
 
     def __init__(self):
         if not self._logger.handlers:
-            self._logger.setLevel(logging.INFO)
+            self._logger.setLevel(logging.DEBUG)
             console_handler = logging.StreamHandler()
             file_handler = logging.FileHandler(
                 f"logs/log_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log"

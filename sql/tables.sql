@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX ON users (moderator_id);
 
+-- Table to store unique locations
+CREATE TABLE IF NOT EXISTS index_locations (
+    id SERIAL PRIMARY KEY,
+    location TEXT UNIQUE NOT NULL
+);
+CREATE INDEX ON index_locations (location);
+
 -- Table to store person entities
 CREATE TABLE IF NOT EXISTS persons (
     id SERIAL PRIMARY KEY,
@@ -16,13 +23,6 @@ CREATE TABLE IF NOT EXISTS persons (
     wikidata_iri TEXT UNIQUE
 );
 CREATE INDEX ON persons (label);
-
--- Table to store unique locations
-CREATE TABLE IF NOT EXISTS index_locations (
-    id SERIAL PRIMARY KEY,
-    location TEXT UNIQUE NOT NULL
-);
-CREATE INDEX ON index_locations (location);
 
 -- Table for storing private collections with an owner
 CREATE TABLE IF NOT EXISTS private_collections (
@@ -70,6 +70,13 @@ CREATE TABLE IF NOT EXISTS fonds (
 CREATE INDEX ON fonds (archive_id);
 CREATE INDEX ON fonds (image_base);
 
+-- Table to store images
+CREATE TABLE IF NOT EXISTS images (
+    id SERIAL PRIMARY KEY,
+    url TEXT UNIQUE NOT NULL,
+    is_external BOOLEAN NOT NULL DEFAULT TRUE
+);
+
 -- Table to store individual charters
 CREATE TABLE IF NOT EXISTS charters (
     id SERIAL PRIMARY KEY,
@@ -86,7 +93,6 @@ CREATE TABLE IF NOT EXISTS charters (
 );
 CREATE INDEX ON charters (last_editor_id);
 CREATE INDEX ON charters (sort_date);
-
 
 -- Table for storing versions of charters that are being edited
 CREATE TABLE IF NOT EXISTS saved_charters (
@@ -164,12 +170,16 @@ CREATE TABLE IF NOT EXISTS collection_fonds (
 CREATE INDEX ON collection_fonds (collection_id);
 CREATE INDEX ON collection_fonds (fond_id);
 
--- Table to store images
-CREATE TABLE IF NOT EXISTS images (
-    id SERIAL PRIMARY KEY,
-    url TEXT UNIQUE NOT NULL,
-    is_external BOOLEAN NOT NULL DEFAULT TRUE
+-- Table for users to bookmark charters with optional notes
+CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    charter_id INTEGER NOT NULL REFERENCES charters (id),
+    note TEXT,
+    PRIMARY KEY (user_id, charter_id)
 );
+CREATE INDEX ON user_charter_bookmarks (charter_id);
+CREATE INDEX ON user_charter_bookmarks (note);
+CREATE INDEX ON user_charter_bookmarks (user_id);
 
 -- Association table for charters and images
 CREATE TABLE IF NOT EXISTS charters_images (
@@ -180,6 +190,25 @@ CREATE TABLE IF NOT EXISTS charters_images (
 CREATE INDEX ON charters_images (charter_id);
 CREATE INDEX ON charters_images (image_id);
 
+-- Association table for saved charters and images
+CREATE TABLE IF NOT EXISTS saved_charters_images (
+    saved_charter_id INTEGER NOT NULL REFERENCES saved_charters (id),
+    image_id INTEGER NOT NULL REFERENCES images (id),
+    PRIMARY KEY (saved_charter_id, image_id)
+);
+CREATE INDEX ON saved_charters_images (saved_charter_id);
+CREATE INDEX ON saved_charters_images (image_id);
+
+-- Association table for private charters and images
+CREATE TABLE IF NOT EXISTS private_charters_images (
+    private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
+    image_id INTEGER NOT NULL REFERENCES images (id),
+    PRIMARY KEY (private_charter_id, image_id)
+);
+CREATE INDEX ON private_charters_images (private_charter_id);
+CREATE INDEX ON private_charters_images (image_id);
+
+-- Table to store person names mentioned in charters
 CREATE TABLE IF NOT EXISTS person_names (
     id SERIAL PRIMARY KEY,
     key TEXT,
@@ -194,8 +223,7 @@ CREATE INDEX ON person_names (person_id);
 CREATE INDEX ON person_names (reg);
 CREATE INDEX ON person_names (text);
 
-
--- Table to store person names mentioned in charters
+-- Table for storing associations between charters and person names
 CREATE TABLE IF NOT EXISTS charters_person_names (
     charter_id INTEGER NOT NULL REFERENCES charters (id),
     person_name_id INTEGER NOT NULL REFERENCES person_names (id),
@@ -204,50 +232,20 @@ CREATE TABLE IF NOT EXISTS charters_person_names (
 CREATE INDEX ON charters_person_names (charter_id);
 CREATE INDEX ON charters_person_names (person_name_id);
 
--- Similar to `charters_person_names` but for saved charters
+-- Table for storing person names mentioned in saved charters
 CREATE TABLE IF NOT EXISTS saved_charters_person_names (
     saved_charter_id INTEGER NOT NULL REFERENCES saved_charters (id),
     person_name_id INTEGER NOT NULL REFERENCES person_names (id),
     PRIMARY KEY (saved_charter_id, person_name_id)
 );
-CREATE INDEX ON saved_charters_person_names (person_name_id);
 CREATE INDEX ON saved_charters_person_names (saved_charter_id);
+CREATE INDEX ON saved_charters_person_names (person_name_id);
 
-
--- Association table for saved charters and images
-CREATE TABLE IF NOT EXISTS saved_charters_images (
-    saved_charter_id INTEGER NOT NULL REFERENCES saved_charters (id),
-    image_id INTEGER NOT NULL REFERENCES images (id),
-    PRIMARY KEY (saved_charter_id, image_id)
-);
-CREATE INDEX ON saved_charters_images (image_id);
-CREATE INDEX ON saved_charters_images (saved_charter_id);
-
--- Association table for private charters and images
-CREATE TABLE IF NOT EXISTS private_charters_images (
-    private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
-    image_id INTEGER NOT NULL REFERENCES images (id),
-    PRIMARY KEY (private_charter_id, image_id)
-);
-CREATE INDEX ON private_charters_images (image_id);
-CREATE INDEX ON private_charters_images (private_charter_id);
-
--- Similar to `charters_person_names` but for private charters
+-- Table for storing person names mentioned in private charters
 CREATE TABLE IF NOT EXISTS private_charters_person_names (
     private_charter_id INTEGER NOT NULL REFERENCES private_charters (id),
     person_name_id INTEGER NOT NULL REFERENCES person_names (id),
     PRIMARY KEY (private_charter_id, person_name_id)
 );
-CREATE INDEX ON private_charters_person_names (person_name_id);
 CREATE INDEX ON private_charters_person_names (private_charter_id);
-
--- Table for users to bookmark charters with optional notes
-CREATE TABLE IF NOT EXISTS user_charter_bookmarks (
-    user_id INTEGER NOT NULL REFERENCES users (id),
-    charter_id INTEGER NOT NULL REFERENCES charters (id),
-    note TEXT,
-    PRIMARY KEY (user_id, charter_id)
-);
-CREATE INDEX ON user_charter_bookmarks (charter_id);
-CREATE INDEX ON user_charter_bookmarks (note);
-CREATE INDEX ON user_charter_bookmarks (user_id);
+CREATE INDEX ON private_charters_person_names (person_name_id);

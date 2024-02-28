@@ -103,17 +103,28 @@ class CharterDb:
         )
         return [table[0] for table in self._cur.fetchall()]
 
-    def _reset_db(self, reset_tables: List[str]):
+    def _reset_db(self):
         if not self._con or not self._cur:
             return
-        tables: List[str] = (
-            reset_tables if len(reset_tables) > 0 else self._list_tables()
-        )
+        # Drop tables
+        tables: List[str] = self._list_tables()
         for table in tables:
             self._cur.execute(
                 sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table))
             )
             log.debug(f"Table {table} dropped")
+        # Drop all functions
+        self._cur.execute(
+            """
+            SELECT 'DROP FUNCTION IF EXISTS ' || ns.nspname || '.' || proname || '(' || oidvectortypes(proargtypes) || ');'
+            FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid)
+            WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+        """
+        )
+        functions = self._cur.fetchall()
+        for func in functions:
+            self._cur.execute(func[0])
+            log.debug(f"Function dropped: {func[0]}")
         self._con.commit()
 
     def reset_serial_id_sequences(self):
@@ -141,13 +152,22 @@ class CharterDb:
 
         self._con.commit()
 
-    def setup_db(self, reset_tables: List[str] = []):
+    def _setup_db_structures(self):
         if not self._con or not self._cur:
             return
-        self._reset_db(reset_tables)
         self._cur.execute(_read_sql_file("sql/tables.sql"))
         self._cur.execute(_read_sql_file("sql/functions.sql"))
         self._cur.execute(_read_sql_file("sql/alterations.sql"))
+        self._con.commit()
+
+    def setup_db(self):
+        self._reset_db()
+        self._setup_db_structures()
+
+    def enable_triggers(self):
+        if not self._con or not self._cur:
+            return
+        self._cur.execute(_read_sql_file("sql/triggers.sql"))
         self._con.commit()
 
     def insert_index_locations(self):
