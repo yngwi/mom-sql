@@ -8,15 +8,14 @@ from modules.models.mom_backup import MomBackup
 log = Logger()
 
 # Backup settings
-backup_zip = "./data/full20240223-0400.zip"
-# backup_zip = "./data/full20210819-0400.zip"
+backup_zip = str(os.environ.get("BACKUP_PATH"))
 
 # Image file list settings
-image_files_path = "./data/filelist_20240209.txt"
+image_files_path = str(os.environ.get("IMAGE_LIST_PATH"))
 
 # Postgres settings
-pg_password = os.environ.get("PG_PW")
-pg_host = os.environ.get("PG_HOST")
+pg_password = str(os.environ.get("PG_PW"))
+pg_host = str(os.environ.get("PG_HOST"))
 
 log.info(f"Connecting to database at {pg_host}")
 with CharterDb(pg_host, pg_password) as db:
